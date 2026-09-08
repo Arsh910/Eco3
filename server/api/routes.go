@@ -11,7 +11,7 @@ func (app *application) routes() http.Handler {
 
 	v1 := g.Group("api/v1")
 	{
-		v1.GET("ws/", app.handleSocket)
+		v1.GET("ws", app.handleSocket)
 	}
 	return g
 }
