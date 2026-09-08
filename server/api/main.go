@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"server/internal/env"
 	"server/internal/hub"
+	"server/internal/room"
 
 	"github.com/gorilla/websocket"
 )
@@ -13,6 +14,7 @@ type application struct {
 	port int
 	upg  websocket.Upgrader
 	hub  *hub.Hub
+	rm   *room.RoomManger
 }
 
 var upgrader = websocket.Upgrader{
@@ -24,6 +26,7 @@ func main() {
 		port: env.GetEnvInt("PORT", 8080),
 		upg:  upgrader,
 		hub:  hub.New(),
+		rm:   room.NewRoomManager(),
 	}
 
 	if err := app.serve(); err != nil {
