@@ -12,7 +12,7 @@ import (
 const (
 	roomCodeChars  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	roomCodeLength = 6
-	maxRoomMembers = 2
+	maxRoomMembers = 4 // more than this won't work as of design constraints
 )
 
 var (
@@ -20,15 +20,27 @@ var (
 	ErrRoomNotFound = errors.New("room not found")
 )
 
+type Peer struct {
+	ID   string
+	Conn *websocket.Conn
+	mu   sync.Mutex
+}
+
 type Room struct {
 	Code  string
-	peers map[*websocket.Conn]bool
+	peers map[string]*Peer
 	mu    sync.Mutex
 }
 
 type RoomManger struct {
 	mu    sync.Mutex
 	rooms map[string]*Room
+}
+
+func (p *Peer) Send(v any) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.Conn.WriteJSON(v)
 }
 
 func NewRoomManager() *RoomManger {
@@ -64,7 +76,7 @@ func (rm *RoomManger) CreateRoom() *Room {
 
 	room := &Room{
 		Code:  code,
-		peers: make(map[*websocket.Conn]bool),
+		peers: make(map[string]*Peer),
 	}
 
 	rm.rooms[code] = room
@@ -105,7 +117,7 @@ func (rm *RoomManger) RemoveRoomIfEmpty(code string) {
 	}
 }
 
-func (r *Room) JoinRoom(conn *websocket.Conn) error {
+func (r *Room) JoinRoom(peer *Peer) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -113,24 +125,61 @@ func (r *Room) JoinRoom(conn *websocket.Conn) error {
 		return ErrRoomFull
 	}
 
-	r.peers[conn] = true
+	exsisting := make([]string, 0, len(r.peers))
+	for id := range r.peers {
+		exsisting = append(exsisting, id)
+	}
+
+	peer.Send(map[string]any{
+		"type":  "peers",
+		"peers": exsisting,
+		"self":  peer.ID,
+	})
+
+	for _, p := range r.peers {
+		p.Send(map[string]any{
+			"type":   "peer-joined",
+			"peerId": peer.ID,
+		})
+	}
+
+	r.peers[peer.ID] = peer
 	log.Println("peer joined room", r.Code, "| total peers: ", len(r.peers))
+
 	return nil
 }
 
-func (r *Room) LeaveRoom(conn *websocket.Conn) {
+func (r *Room) RouteTo(targetID string, msg []byte) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.peers, conn)
-	log.Println("peer left room", r.Code, "| total peers: ", len(r.peers))
+	target, ok := r.peers[targetID]
+	r.mu.Unlock()
+
+	if !ok {
+		return
+	}
+
+	target.mu.Lock()
+	defer target.mu.Unlock()
+
+	target.Conn.WriteMessage(websocket.TextMessage, msg)
 }
 
-func (r *Room) BroadcastExcept(sender *websocket.Conn, msg []byte) {
+func (r *Room) LeaveRoom(peerId string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	for peer := range r.peers {
-		if peer != sender {
-			peer.WriteMessage(websocket.TextMessage, msg)
-		}
+	delete(r.peers, peerId)
+	remaining := make([]*Peer, 0, len(r.peers))
+
+	for _, p := range r.peers {
+		remaining = append(remaining, p)
 	}
+	r.mu.Unlock()
+
+	for _, p := range remaining {
+		p.Send(map[string]any{
+			"type":   "peer-left",
+			"peerId": peerId,
+		})
+	}
+
+	log.Println("peer left room", r.Code, "| total peers: ", len(r.peers))
 }

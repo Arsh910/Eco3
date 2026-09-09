@@ -1,11 +1,21 @@
 import { useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { formatBytes } from '../lib/format';
+import { hasFSA } from '../lib/capabilities';
 
-function Transfer({ transfer }) {
-  const progressed = (transfer.direction === 'sending' ? transfer.sent : transfer.received) ?? 0;
+function status(transfer, incoming) {
+  if (transfer.done) return 'Complete';
+  if (!transfer.accepted) {
+    if (!incoming) return 'Waiting for peer';
+    return hasFSA ? 'Waiting for you' : 'Cannot receive in this browser';
+  }
+  return incoming ? 'Receiving' : 'Sending';
+}
+
+function Transfer({ id, transfer, onAccept }) {
+  const incoming = transfer.direction === 'receiving';
+  const progressed = (incoming ? transfer.received : transfer.sent) ?? 0;
   const pct = transfer.total ? Math.round((progressed / transfer.total) * 100) : 0;
-  const verb = transfer.direction === 'sending' ? 'Sent' : 'Received';
 
   return (
     <article className="transfer">
@@ -14,31 +24,51 @@ function Transfer({ transfer }) {
         <div className="transfer__name" title={transfer.name}>
           {transfer.name}
         </div>
-        <span className="transfer__pct">{transfer.done ? 'Done' : `${pct}%`}</span>
+
+        {incoming && !transfer.accepted ? (
+          <button
+            type="button"
+            className="btn btn--sm btn--primary"
+            onClick={() => onAccept(id)}
+            disabled={!hasFSA}
+            title={hasFSA ? undefined : 'Requires a Chromium browser'}
+          >
+            Accept
+          </button>
+        ) : (
+          <span className="transfer__pct">{transfer.done ? 'Done' : `${pct}%`}</span>
+        )}
       </div>
 
       <p className="transfer__sub">
-        {verb} · {formatBytes(transfer.size)}
+        {status(transfer, incoming)} · {formatBytes(transfer.size)}
       </p>
 
-      <div className="track">
-        <div
-          className={`track__fill ${transfer.done ? 'track__fill--done' : ''}`}
-          style={{ width: `${transfer.done ? 100 : pct}%` }}
-        />
-      </div>
+      {transfer.accepted && (
+        <div className="track">
+          <div
+            className={`track__fill ${transfer.done ? 'track__fill--done' : ''}`}
+            style={{ width: `${transfer.done ? 100 : pct}%` }}
+          />
+        </div>
+      )}
 
-      {transfer.url && (
-        <a className="dl" href={transfer.url} download={transfer.name}>
-          <Icon name="download" size={13} />
-          Download
+      {transfer.openUrl && (
+        <a
+          className="transfer__open"
+          href={transfer.openUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Icon name="external" size={13} />
+          Open
         </a>
       )}
     </article>
   );
 }
 
-export function FilePanel({ transfers, onSend, disabled }) {
+export function FilePanel({ transfers, onSend, onAccept, disabled }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const items = Object.entries(transfers);
@@ -55,10 +85,17 @@ export function FilePanel({ transfers, onSend, disabled }) {
       <header className="panel__head">
         <div>
           <h2 className="panel__title">Files</h2>
-          <p className="panel__meta">
-            <Icon name="lock" size={12} />
-            Encrypted peer-to-peer (DTLS)
-          </p>
+          {hasFSA ? (
+            <p className="panel__meta">
+              <Icon name="lock" size={12} />
+              Encrypted peer-to-peer (DTLS)
+            </p>
+          ) : (
+            <p className="panel__meta panel__meta--warn">
+              <Icon name="alert" size={12} />
+              Send only — this browser can’t receive files
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -103,10 +140,16 @@ export function FilePanel({ transfers, onSend, disabled }) {
                 <Icon name="upload" size={18} />
               </span>
               <span className="empty__title">No transfers yet</span>
-              <span className="empty__hint">Drop a file here or use Select file</span>
+              <span className="empty__hint">
+                {hasFSA
+                  ? 'Drop a file here or use Select file'
+                  : 'Drop a file here to send — incoming files can’t be saved in this browser'}
+              </span>
             </div>
           ) : (
-            items.map(([id, transfer]) => <Transfer key={id} transfer={transfer} />)
+            items.map(([id, transfer]) => (
+              <Transfer key={id} id={id} transfer={transfer} onAccept={onAccept} />
+            ))
           )}
         </div>
       </div>

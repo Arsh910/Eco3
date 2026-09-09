@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback } from 'react'
+import { hasFSA } from '../lib/capabilities'
 
-const SIGNAL = `ws://localhost:8080/api/v1/ws`
+const BASE_SOCKET_URL = `ws://localhost:8080/api/v1`
+const BASE_API_URL = `http://localhost:8080/api/v1`
 const CHUNK_SIZE = 64 * 1024;
 const BUFFER_LOW_THRESHOLD = CHUNK_SIZE * 4;
+const PREVIEWABLE = /^(image|video|audio|text)\/|^application\/pdf$/;
 
 let messageId = 0;
 
 export function useWebRTC() {
   const [status, setStatus] = useState('idle');
   const [signaling, setSignaling] = useState('connecting');
+  const [roomCode, setRoomCode] = useState(null);
   const [messages, setMessages] = useState([]);
   const [logs, setLogs] = useState([]);
   const [transfers, setTransfer] = useState({});
@@ -21,6 +25,7 @@ export function useWebRTC() {
 
   const incommingRef = useRef({});
   const lastUpdateRef = useRef({});
+  const pendingAcceptRef = useRef({});
 
   const log = useCallback((msg) => {
     setLogs((prev) => [...prev, msg]);
@@ -38,17 +43,29 @@ export function useWebRTC() {
     }));
   }, []);
 
-  const tryFinalize = useCallback((fileId) => {
+  const tryFinalize = useCallback(async (fileId) => {
     const state = incommingRef.current[fileId];
     if (!state) return;
-    if (!state.completeSignal) return;               // sender hasn't said "done" yet
-    if (state.received < state.meta.totalChunks) return; // chunks still missing
+    if (!state.writable) return;
+    if (!state.completeSignal) return;
+    if (state.received < state.meta.totalChunks) return;
 
-    const blob = new Blob(state.chunks);
-    const url = URL.createObjectURL(blob);
-    updateTransfer(fileId, { done: true, url, received: state.received });
+    // lands second, so guard against closing the stream twice.
+    if (state.finalizing) return;
+    state.finalizing = true;
+
+    await state.writable.close();
+
+    // costs nothing and opening it never re-downloads the file.
+    const file = await state.handle.getFile();
+    const openUrl = PREVIEWABLE.test(file.type) ? URL.createObjectURL(file) : null;
+
+    updateTransfer(fileId, { done: true, received: state.received, openUrl });
     log(`file completed: ${state.meta.name}`);
+
     delete incommingRef.current[fileId];
+    delete lastUpdateRef.current[fileId];
+
   }, [log, updateTransfer]);
 
   const handleControlMessage = useCallback((rawMsg) => {
@@ -61,7 +78,8 @@ export function useWebRTC() {
 
     if (msg.type === 'file-meta') {
       incommingRef.current[msg.fileId] = {
-        chunks: new Array(msg.totalChunks),
+        writable: null,
+        accepted: false,
         received: 0,
         meta: msg,
       }
@@ -71,9 +89,19 @@ export function useWebRTC() {
         received: 0,
         total: msg.totalChunks,
         done: false,
+        accepted: false,
         direction: 'receiving',
       });
       log(`incomming file : ${msg.name} (${msg.totalChunks} chunks)`)
+      return;
+    }
+
+    if (msg.type === 'file-accept') {
+      const resolver = pendingAcceptRef.current[msg.fileId];
+      if (resolver) {
+        resolver();
+        delete pendingAcceptRef.current[msg.fileId];
+      }
       return;
     }
 
@@ -86,7 +114,7 @@ export function useWebRTC() {
 
   }, [log, pushMessage, updateTransfer, tryFinalize]);
 
-  const handleFileChunck = useCallback((buffer) => {
+  const handleFileChunck = useCallback(async (buffer) => {
     const view = new DataView(buffer);
     const index = view.getUint32(0);
     const chunckData = buffer.slice(4);
@@ -95,7 +123,15 @@ export function useWebRTC() {
     if (!fileId) return;
 
     const state = incommingRef.current[fileId];
-    state.chunks[index] = chunckData;
+    if (!state?.writable) return;
+
+    // The file channel is unordered, so every chunk must name its own offset.
+    await state.writable.write({
+      type: 'write',
+      position: index * state.meta.chunkSize,
+      data: chunckData,
+    })
+
     state.received += 1;
 
     //performance improvement
@@ -105,13 +141,37 @@ export function useWebRTC() {
       lastUpdateRef.current[fileId] = now;
       updateTransfer(fileId, { received: state.received });
     }
-    delete lastUpdateRef.current[fileId];
     tryFinalize(fileId);
 
   }, [updateTransfer, tryFinalize]);
 
-  useEffect(() => {
-    const ws = new WebSocket(SIGNAL);
+  const startConnection = useCallback((pc, ws) => {
+
+    const control = pc.createDataChannel('control');
+    controlRef.current = control;
+
+    control.onopen = () => log('control channel open');
+    control.onclose = () => log('control channel closed');
+    control.onmessage = (e) => handleControlMessage(e.data);
+
+    // ordered false becuase we have our own reassembly logic as we tag every chunk
+    const fileChannel = pc.createDataChannel('file', { ordered: false });
+    fileChannelRef.current = fileChannel;
+
+    fileChannel.binaryType = 'arraybuffer';
+    fileChannel.onopen = () => log('file channel open');
+    fileChannel.onclose = () => log('file channel closed');
+    fileChannel.onmessage = (e) => handleFileChunck(e.data);
+
+    pc.createOffer()
+      .then((offer) => pc.setLocalDescription(offer).then(() => offer))
+      .then((offer) => ws.send(JSON.stringify({ type: 'offer', sdp: offer })));
+  }, [log, handleControlMessage, handleFileChunck]);
+
+  const connectToRoom = useCallback((code, isCreator) => {
+    setRoomCode(code);
+
+    const ws = new WebSocket(`${BASE_SOCKET_URL}/ws/${code}`);
     wsRef.current = ws;
 
 
@@ -138,6 +198,18 @@ export function useWebRTC() {
 
     ws.onmessage = async (event) => {
       const msg = JSON.parse(event.data);
+
+      // Only now is there someone in the room to receive the offer.
+      if (msg.type === 'peer-joined') {
+        log('peer joined the room');
+        if (isCreator) startConnection(pc, ws);
+        return;
+      }
+
+      if (msg.type === 'error') {
+        log('signaling: ' + msg.message);
+        return;
+      }
 
       if (msg.type === 'offer') {
         await pc.setRemoteDescription(msg.sdp);
@@ -189,39 +261,46 @@ export function useWebRTC() {
       }
     }
 
-    return () => {
-      controlRef.current?.close();
-      pc.close();
-      ws.close();
+  }, [log, startConnection, handleControlMessage, handleFileChunck]);
+
+  const createRoom = useCallback(async () => {
+    const res = await fetch(`${BASE_API_URL}/room/create`, { method: 'POST' });
+    if (!res.ok) throw new Error(`room create failed: ${res.status}`);
+
+    const data = await res.json();
+    connectToRoom(data.code, true);
+  }, [connectToRoom]);
+
+  const joinRoom = useCallback((code) => {
+    connectToRoom(code, false);
+  }, [connectToRoom]);
+
+  // Called straight from a button click.
+  const acceptFile = useCallback(async (fileId) => {
+    const state = incommingRef.current[fileId];
+    if (!state || state.accepted) return;
+
+    if (!hasFSA) {
+      log('this browser cannot stream files to disk (needs the File System Access API)');
+      return;
     }
 
-  }, [log, handleControlMessage, handleFileChunck]);
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({ suggestedName: state.meta.name });
+    } catch {
+      log(`save cancelled: ${state.meta.name}`);
+      return;
+    }
 
-  const startConnection = useCallback(() => {
-    const pc = pcRef.current;
-    const ws = wsRef.current;
+    state.handle = handle;
+    state.writable = await handle.createWritable();
+    state.accepted = true;
 
-    const control = pc.createDataChannel('control');
-    controlRef.current = control;
-
-    control.onopen = () => log('control channel open');
-    control.onclose = () => log('control channel closed');
-    control.onmessage = (e) => handleControlMessage(e.data);
-
-    // ordered false becuase we have our own reassembly logic as we tag every chunk
-    const fileChannel = pc.createDataChannel('file', { ordered: false });
-    fileChannelRef.current = fileChannel;
-    fileChannel.binaryType = 'arraybuffer';
-    fileChannel.onopen = () => log('file channel open');
-    fileChannel.onclose = () => log('file channel closed');
-    fileChannel.onmessage = (e) => handleFileChunck(e.data);
-
-    pc.createOffer()
-      .then((offer) => pc.setLocalDescription(offer).then(() => offer))
-      .then((offer) => {
-        ws.send(JSON.stringify({ type: 'offer', sdp: offer }));
-      });
-  }, [log, handleControlMessage, handleFileChunck]);
+    updateTransfer(fileId, { accepted: true });
+    controlRef.current.send(JSON.stringify({ type: 'file-accept', fileId }));
+    log(`accepted: ${state.meta.name}`);
+  }, [log, updateTransfer]);
 
   const sendMessage = useCallback((text) => {
     if (controlRef.current?.readyState === 'open') {
@@ -252,14 +331,23 @@ export function useWebRTC() {
       chunkSize: CHUNK_SIZE,
     }))
 
+    // Shown before the wait so the sender can see the file is pending approval.
     updateTransfer(fileId, {
       name: file.name,
       size: file.size,
       sent: 0,
       total: totalChunks,
       done: false,
+      accepted: false,
       direction: 'sending',
     })
+
+    await new Promise((resolve) => {
+      pendingAcceptRef.current[fileId] = resolve;
+    });
+
+    log("peer accepted , sending chunks");
+    updateTransfer(fileId, { accepted: true });
 
     fileChannel.bufferedAmountLowThreshold = BUFFER_LOW_THRESHOLD;
 
@@ -345,5 +433,5 @@ export function useWebRTC() {
 
   }, [log, updateTransfer]);
 
-  return { status, signaling, messages, logs, transfers, startConnection, sendMessage, sendFile };
+  return { status, signaling, roomCode, messages, logs, transfers, createRoom, joinRoom, sendMessage, sendFile, acceptFile };
 }
