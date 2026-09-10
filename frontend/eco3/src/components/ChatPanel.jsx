@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
-import { formatTime } from '../lib/format';
+import { formatTime, peerLabel } from '../lib/format';
 
-export function ChatPanel({ messages, onSend, disabled }) {
+export function ChatPanel({ messages, onSend, targetCount, disabled }) {
   const [text, setText] = useState('');
   const bottomRef = useRef(null);
 
@@ -23,7 +23,9 @@ export function ChatPanel({ messages, onSend, disabled }) {
       <header className="panel__head">
         <div>
           <h2 className="panel__title">Messages</h2>
-          <p className="panel__meta">Sent over the control channel</p>
+          <p className="panel__meta">
+            {targetCount === 1 ? 'Sent to 1 peer' : `Sent to ${targetCount} peers`}
+          </p>
         </div>
       </header>
 
@@ -43,6 +45,9 @@ export function ChatPanel({ messages, onSend, disabled }) {
                 key={message.id}
                 className={`bubble ${message.from === 'me' ? 'bubble--me' : ''}`}
               >
+                {message.from !== 'me' && (
+                  <span className="bubble__from">{peerLabel(message.from)}</span>
+                )}
                 {message.text}
                 <span className="bubble__time">{formatTime(message.at)}</span>
               </div>

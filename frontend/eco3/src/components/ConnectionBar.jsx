@@ -3,13 +3,13 @@ import { Icon } from './Icon';
 
 const CODE_LENGTH = 6;
 
-export function ConnectionBar({ roomCode, peer, createRoom, joinRoom }) {
+export function ConnectionBar({ roomCode, signaling, peerCount, createRoom, joinRoom }) {
   const [code, setCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
   const inRoom = Boolean(roomCode);
-  const waiting = inRoom && peer !== 'connected';
+  const waiting = inRoom && peerCount === 0;
 
   const create = async () => {
     setError('');
@@ -81,7 +81,13 @@ export function ConnectionBar({ roomCode, peer, createRoom, joinRoom }) {
         </button>
       </div>
 
-      {waiting && <p className="connbar__hint">Waiting for the other peer to join…</p>}
+      {waiting && (
+        <p className="connbar__hint">
+          {signaling === 'open'
+            ? 'Share the code — waiting for peers to join…'
+            : 'Connecting to the signaling server…'}
+        </p>
+      )}
       {error && <p className="connbar__error">{error}</p>}
     </section>
   );

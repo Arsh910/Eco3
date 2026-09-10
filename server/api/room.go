@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"server/internal/room"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,6 +22,29 @@ func generatePeerID() string {
 	b := make([]byte, 8)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+const maxAliasLength = 12
+
+func sanitizeAlias(raw string) string {
+	var b strings.Builder
+	for _, r := range raw {
+		if b.Len() >= maxAliasLength {
+			break
+		}
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func peerID(alias string) string {
+	id := generatePeerID()
+	if alias = sanitizeAlias(alias); alias != "" {
+		return alias + "-" + id
+	}
+	return id
 }
 
 type SignalMessage struct {
@@ -47,7 +71,7 @@ func (app *application) handleJoinRoom(c *gin.Context) {
 	defer conn.Close()
 
 	peer := &room.Peer{
-		ID:   generatePeerID(),
+		ID:   peerID(c.Query("alias")),
 		Conn: conn,
 	}
 

@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from 'react'
 import { hasFSA } from '../lib/capabilities'
+import { peerLabel } from '../lib/format'
 
 const BASE_SOCKET_URL = `ws://localhost:8080/api/v1`
 const BASE_API_URL = `http://localhost:8080/api/v1`
@@ -9,23 +10,24 @@ const PREVIEWABLE = /^(image|video|audio|text)\/|^application\/pdf$/;
 
 let messageId = 0;
 
+const tkey = (peerId, fileId) => `${peerId}:${fileId}`;
+
 export function useWebRTC() {
-  const [status, setStatus] = useState('idle');
+  const [peers, setPeers] = useState([]); // [{ id, state }]
   const [signaling, setSignaling] = useState('connecting');
   const [roomCode, setRoomCode] = useState(null);
+  const [selfId, setSelfId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [logs, setLogs] = useState([]);
   const [transfers, setTransfer] = useState({});
 
   const wsRef = useRef(null);
-  const pcRef = useRef(null);
+  const selfIdRef = useRef(null);
 
-  const controlRef = useRef(null);
-  const fileChannelRef = useRef(null);
-
-  const incommingRef = useRef({});
-  const lastUpdateRef = useRef({});
-  const pendingAcceptRef = useRef({});
+  const peersRef = useRef({});           // peerId -> { pc, control, fileChannel }
+  const incommingRef = useRef({});       // peerId -> fileId -> state
+  const lastUpdateRef = useRef({});      // "peerId:fileId" -> timestamp
+  const pendingAcceptRef = useRef({});   // "peerId:fileId" -> resolve fn
 
   const log = useCallback((msg) => {
     setLogs((prev) => [...prev, msg]);
@@ -36,15 +38,16 @@ export function useWebRTC() {
     setMessages((prev) => [...prev, { id: messageId, from, text, at: Date.now() }]);
   }, []);
 
-  const updateTransfer = useCallback((fileId, patch) => {
+  const updateTransfer = useCallback((peerId, fileId, patch) => {
+    const k = tkey(peerId, fileId);
     setTransfer((prev) => ({
       ...prev,
-      [fileId]: { ...prev[fileId], ...patch },
+      [k]: { ...prev[k], peerId, fileId, ...patch },
     }));
   }, []);
 
-  const tryFinalize = useCallback(async (fileId) => {
-    const state = incommingRef.current[fileId];
+  const tryFinalize = useCallback(async (peerId, fileId) => {
+    const state = incommingRef.current[peerId]?.[fileId];
     if (!state) return;
     if (!state.writable) return;
     if (!state.completeSignal) return;
@@ -60,30 +63,34 @@ export function useWebRTC() {
     const file = await state.handle.getFile();
     const openUrl = PREVIEWABLE.test(file.type) ? URL.createObjectURL(file) : null;
 
-    updateTransfer(fileId, { done: true, received: state.received, openUrl });
-    log(`file completed: ${state.meta.name}`);
+    updateTransfer(peerId, fileId, { done: true, received: state.received, openUrl });
+    log(`file completed from ${peerLabel(peerId)}: ${state.meta.name}`);
 
-    delete incommingRef.current[fileId];
-    delete lastUpdateRef.current[fileId];
+    delete incommingRef.current[peerId][fileId];
+    delete lastUpdateRef.current[tkey(peerId, fileId)];
 
   }, [log, updateTransfer]);
 
-  const handleControlMessage = useCallback((rawMsg) => {
+  const handleControlMessage = useCallback((peerId, rawMsg) => {
     const msg = JSON.parse(rawMsg);
 
     if (msg.type === 'chat') {
-      pushMessage('peer', msg.text);
+      pushMessage(peerId, msg.text);
       return;
     }
 
     if (msg.type === 'file-meta') {
-      incommingRef.current[msg.fileId] = {
+      if (!incommingRef.current[peerId]) incommingRef.current[peerId] = {};
+      incommingRef.current[peerId][msg.fileId] = {
         writable: null,
+        handle: null,
         accepted: false,
+        completeSignal: false,
+        finalizing: false,
         received: 0,
         meta: msg,
       }
-      updateTransfer(msg.fileId, {
+      updateTransfer(peerId, msg.fileId, {
         name: msg.name,
         size: msg.size,
         received: 0,
@@ -97,32 +104,37 @@ export function useWebRTC() {
     }
 
     if (msg.type === 'file-accept') {
-      const resolver = pendingAcceptRef.current[msg.fileId];
+      const k = tkey(peerId, msg.fileId);
+      const resolver = pendingAcceptRef.current[k];
       if (resolver) {
         resolver();
-        delete pendingAcceptRef.current[msg.fileId];
+        delete pendingAcceptRef.current[k];
       }
       return;
     }
 
     if (msg.type === 'file-complete') {
-      const state = incommingRef.current[msg.fileId];
+      const state = incommingRef.current[peerId]?.[msg.fileId];
       if (!state) return;
       state.completeSignal = true;
-      tryFinalize(msg.fileId);
+      tryFinalize(peerId, msg.fileId);
     }
 
   }, [log, pushMessage, updateTransfer, tryFinalize]);
 
-  const handleFileChunck = useCallback(async (buffer) => {
+  const handleFileChunck = useCallback(async (peerId, buffer) => {
     const view = new DataView(buffer);
     const index = view.getUint32(0);
     const chunckData = buffer.slice(4);
 
-    const fileId = Object.keys(incommingRef.current)[0];
+
+    const peerFiles = incommingRef.current[peerId];
+    if (!peerFiles) return;
+
+    const fileId = Object.keys(peerFiles)[0];
     if (!fileId) return;
 
-    const state = incommingRef.current[fileId];
+    const state = peerFiles[fileId];
     if (!state?.writable) return;
 
     // The file channel is unordered, so every chunk must name its own offset.
@@ -135,51 +147,85 @@ export function useWebRTC() {
     state.received += 1;
 
     //performance improvement
+    const k = tkey(peerId, fileId);
     const now = performance.now()
-    const last = lastUpdateRef.current[fileId] || 0;
+    const last = lastUpdateRef.current[k] || 0;
     if (now - last > 100 || state.received === state.meta.totalChunks) {
-      lastUpdateRef.current[fileId] = now;
-      updateTransfer(fileId, { received: state.received });
+      lastUpdateRef.current[k] = now;
+      updateTransfer(peerId, fileId, { received: state.received });
     }
-    tryFinalize(fileId);
+    tryFinalize(peerId, fileId);
 
   }, [updateTransfer, tryFinalize]);
 
-  const startConnection = useCallback((pc, ws) => {
-
-    const control = pc.createDataChannel('control');
-    controlRef.current = control;
-
-    control.onopen = () => log('control channel open');
-    control.onclose = () => log('control channel closed');
-    control.onmessage = (e) => handleControlMessage(e.data);
-
-    // ordered false becuase we have our own reassembly logic as we tag every chunk
-    const fileChannel = pc.createDataChannel('file', { ordered: false });
-    fileChannelRef.current = fileChannel;
-
-    fileChannel.binaryType = 'arraybuffer';
-    fileChannel.onopen = () => log('file channel open');
-    fileChannel.onclose = () => log('file channel closed');
-    fileChannel.onmessage = (e) => handleFileChunck(e.data);
-
-    pc.createOffer()
-      .then((offer) => pc.setLocalDescription(offer).then(() => offer))
-      .then((offer) => ws.send(JSON.stringify({ type: 'offer', sdp: offer })));
-  }, [log, handleControlMessage, handleFileChunck]);
-
-  const connectToRoom = useCallback((code, isCreator) => {
-    setRoomCode(code);
-
-    const ws = new WebSocket(`${BASE_SOCKET_URL}/ws/${code}`);
-    wsRef.current = ws;
-
+  const createPeerConnection = useCallback((peerId, isOfferer) => {
+    const existing = peersRef.current[peerId];
+    if (existing) return existing;
 
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-    });
+    })
 
-    pcRef.current = pc;
+    const entry = { pc, control: null, fileChannel: null };
+    peersRef.current[peerId] = entry;
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        wsRef.current.send(JSON.stringify({ type: 'candidate', to: peerId, candidate: event.candidate }));
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      setPeers((prev) =>
+        prev.map((p) => (p.id === peerId ? { ...p, state: pc.connectionState } : p))
+      );
+    }
+
+    const wireControl = (ch) => {
+      entry.control = ch;
+      ch.onopen = () => log(`control channel open: ${peerLabel(peerId)}`);
+      ch.onclose = () => log(`control channel closed: ${peerLabel(peerId)}`);
+      ch.onmessage = (e) => handleControlMessage(peerId, e.data);
+    }
+
+    const wireFile = (ch) => {
+      entry.fileChannel = ch;
+      ch.binaryType = 'arraybuffer';
+      ch.onopen = () => log(`file channel open: ${peerLabel(peerId)}`);
+      ch.onclose = () => log(`file chanel closed: ${peerLabel(peerId)}`);
+      ch.onmessage = (e) => handleFileChunck(peerId, e.data);
+    }
+
+    if (isOfferer) {
+      wireControl(pc.createDataChannel('control'));
+      wireFile(pc.createDataChannel('file', { ordered: false }));
+
+      pc.createOffer()
+        .then((offer) => pc.setLocalDescription(offer).then(() => offer))
+        .then((offer) => wsRef.current.send(JSON.stringify({
+          type: 'offer', to: peerId, sdp: offer,
+        })));
+
+    } else {
+      pc.ondatachannel = (event) => {
+        if (event.channel.label === 'control') wireControl(event.channel);
+        else if (event.channel.label === 'file') wireFile((event.channel));
+      }
+    }
+
+    return entry;
+
+  }, [log, handleControlMessage, handleFileChunck]);
+
+
+  const shouldOffer = (myId, theirId) => myId > theirId;
+
+  const connectToRoom = useCallback((code, alias) => {
+    setRoomCode(code);
+
+    const query = alias ? `?alias=${encodeURIComponent(alias)}` : '';
+    const ws = new WebSocket(`${BASE_SOCKET_URL}/ws/${code}${query}`);
+    wsRef.current = ws;
 
     ws.onopen = () => {
       setSignaling('open');
@@ -199,23 +245,48 @@ export function useWebRTC() {
     ws.onmessage = async (event) => {
       const msg = JSON.parse(event.data);
 
-      // Only now is there someone in the room to receive the offer.
-      if (msg.type === 'peer-joined') {
-        log('peer joined the room');
-        if (isCreator) startConnection(pc, ws);
-        return;
-      }
-
       if (msg.type === 'error') {
         log('signaling: ' + msg.message);
         return;
       }
 
+      if (msg.type === 'peers') {
+        selfIdRef.current = msg.self;
+        setSelfId(msg.self);
+        setPeers(msg.peers.map((id) => ({ id, state: 'new' })));
+        msg.peers.forEach((peerId) => {
+          createPeerConnection(peerId, shouldOffer(msg.self, peerId));
+        });
+        return;
+      }
+
+      // Only now is there someone in the room to receive the offer.
+      if (msg.type === 'peer-joined') {
+        setPeers((prev) => [...prev, { id: msg.peerId, state: 'new' }]);
+        createPeerConnection(msg.peerId, shouldOffer(selfIdRef.current, msg.peerId));
+        log(`peer joined: ${peerLabel(msg.peerId)}`);
+        return;
+      }
+
+      if (msg.type === 'peer-left') {
+        peersRef.current[msg.peerId]?.pc.close();
+
+        delete peersRef.current[msg.peerId];
+        delete incommingRef.current[msg.peerId];
+
+        setPeers((prev) => prev.filter((p) => p.id !== msg.peerId));
+        log(`peer left : ${peerLabel(msg.peerId)}`);
+        return;
+      }
+
+      const entry = peersRef.current[msg.from] || createPeerConnection(msg.from, false);
+      const pc = entry.pc;
+
       if (msg.type === 'offer') {
         await pc.setRemoteDescription(msg.sdp);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify({ type: "answer", sdp: answer }))
+        ws.send(JSON.stringify({ type: "answer", to: msg.from, sdp: answer }))
       }
 
       else if (msg.type === 'answer') {
@@ -232,52 +303,25 @@ export function useWebRTC() {
       }
     }
 
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
-      }
-    };
+  }, [log, createPeerConnection]);
 
-    pc.onconnectionstatechange = () => {
-      setStatus(pc.connectionState);
-    }
-
-    pc.ondatachannel = (event) => {
-
-      if (event.channel.label === 'control') {
-        controlRef.current = event.channel;
-
-        event.channel.onopen = () => log('control channel open');
-        event.channel.onclose = () => log('control channel closed');
-        event.channel.onmessage = (e) => handleControlMessage(e.data);
-
-      } else if (event.channel.label === 'file') {
-        fileChannelRef.current = event.channel;
-        event.channel.binaryType = 'arraybuffer';
-
-        event.channel.onopen = () => log('file channel open');
-        event.channel.onclose = () => log('file channel closed');
-        event.channel.onmessage = (e) => handleFileChunck(e.data);
-      }
-    }
-
-  }, [log, startConnection, handleControlMessage, handleFileChunck]);
-
-  const createRoom = useCallback(async () => {
+  const createRoom = useCallback(async (alias) => {
     const res = await fetch(`${BASE_API_URL}/room/create`, { method: 'POST' });
     if (!res.ok) throw new Error(`room create failed: ${res.status}`);
 
     const data = await res.json();
-    connectToRoom(data.code, true);
+    connectToRoom(data.code, alias);
+    return data.code;
+
   }, [connectToRoom]);
 
-  const joinRoom = useCallback((code) => {
-    connectToRoom(code, false);
+  const joinRoom = useCallback((code, alias) => {
+    connectToRoom(code, alias);
   }, [connectToRoom]);
 
   // Called straight from a button click.
-  const acceptFile = useCallback(async (fileId) => {
-    const state = incommingRef.current[fileId];
+  const acceptFile = useCallback(async (peerId, fileId) => {
+    const state = incommingRef.current[peerId]?.[fileId];
     if (!state || state.accepted) return;
 
     if (!hasFSA) {
@@ -294,26 +338,39 @@ export function useWebRTC() {
     }
 
     state.handle = handle;
-    state.writable = await handle.createWritable();
+    state.writable = await handle.createWritable({ keepExistingData: true });
     state.accepted = true;
 
-    updateTransfer(fileId, { accepted: true });
-    controlRef.current.send(JSON.stringify({ type: 'file-accept', fileId }));
-    log(`accepted: ${state.meta.name}`);
+    updateTransfer(peerId, fileId, { accepted: true, savedName: handle.name });
+    peersRef.current[peerId]?.control?.send(JSON.stringify({ type: 'file-accept', fileId }));
+    log(`accepted from ${peerLabel(peerId)}: ${state.meta.name}`);
   }, [log, updateTransfer]);
 
-  const sendMessage = useCallback((text) => {
-    if (controlRef.current?.readyState === 'open') {
-      controlRef.current.send(JSON.stringify({ type: 'chat', text }));
-      pushMessage('me', text);
-    } else {
-      log("error: Data channel is closed")
+  const sendMessage = useCallback((text, targetIds) => {
+    const targets = targetIds?.length ? targetIds : Object.keys(peersRef.current);
+    let sent = 0;
+
+    targets.forEach((peerId) => {
+      const ch = peersRef.current[peerId]?.control;
+      if (ch?.readyState === 'open') {
+        ch.send(JSON.stringify({ type: 'chat', text }));
+        sent += 1;
+      }
+    })
+
+    if (sent === 0) {
+      log('error: no open control channels');
+      return
     }
+
+    pushMessage('me', text);
+
   }, [log, pushMessage]);
 
-  const sendFile = useCallback(async (file) => {
-    const control = controlRef.current;
-    const fileChannel = fileChannelRef.current;
+  const sendFiletoPeer = useCallback(async (file, peerId) => {
+    const entry = peersRef.current[peerId];
+    const control = entry?.control;
+    const fileChannel = entry?.fileChannel;
 
     if (!control || !fileChannel || fileChannel.readyState != 'open') {
       log('channels are not ready');
@@ -321,6 +378,7 @@ export function useWebRTC() {
     }
     const fileId = `${file.name} - ${file.size} - ${Date.now()}`;
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const k = tkey(peerId, fileId);
 
     control.send(JSON.stringify({
       type: 'file-meta',
@@ -332,7 +390,7 @@ export function useWebRTC() {
     }))
 
     // Shown before the wait so the sender can see the file is pending approval.
-    updateTransfer(fileId, {
+    updateTransfer(peerId, fileId, {
       name: file.name,
       size: file.size,
       sent: 0,
@@ -343,11 +401,11 @@ export function useWebRTC() {
     })
 
     await new Promise((resolve) => {
-      pendingAcceptRef.current[fileId] = resolve;
+      pendingAcceptRef.current[k] = resolve;
     });
 
-    log("peer accepted , sending chunks");
-    updateTransfer(fileId, { accepted: true });
+    log(`peer accepted, sending chunks: ${peerLabel(peerId)}`);
+    updateTransfer(peerId, fileId, { accepted: true });
 
     fileChannel.bufferedAmountLowThreshold = BUFFER_LOW_THRESHOLD;
 
@@ -397,10 +455,10 @@ export function useWebRTC() {
 
         //performance improvement
         const now = performance.now()
-        const last = lastUpdateRef.current[fileId] || 0;
+        const last = lastUpdateRef.current[k] || 0;
         if (now - last > 100 || index === totalChunks) {
-          lastUpdateRef.current[fileId] = now;
-          updateTransfer(fileId, { sent: index });
+          lastUpdateRef.current[k] = now;
+          updateTransfer(peerId, fileId, { sent: index });
         }
 
         offset += CHUNK_SIZE;
@@ -415,10 +473,10 @@ export function useWebRTC() {
 
           //performance improvement
           const now = performance.now()
-          const last = lastUpdateRef.current[fileId] || 0;
+          const last = lastUpdateRef.current[k] || 0;
           if (now - last > 100 || index === totalChunks) {
-            lastUpdateRef.current[fileId] = now;
-            updateTransfer(fileId, { sent: index });
+            lastUpdateRef.current[k] = now;
+            updateTransfer(peerId, fileId, { sent: index });
           }
 
         }
@@ -427,11 +485,16 @@ export function useWebRTC() {
     }
 
     control.send(JSON.stringify({ type: 'file-complete', fileId }));
-    updateTransfer(fileId, { done: true });
-    delete lastUpdateRef.current[fileId];
-    log(`sent file: ${file.name}`);
+    updateTransfer(peerId, fileId, { done: true });
+    delete lastUpdateRef.current[k];
+    log(`sent file to ${peerLabel(peerId)}: ${file.name}`);
 
   }, [log, updateTransfer]);
 
-  return { status, signaling, roomCode, messages, logs, transfers, createRoom, joinRoom, sendMessage, sendFile, acceptFile };
+  const sendFile = useCallback(async (file, targetIds) => {
+    const targets = targetIds?.length ? targetIds : Object.keys(peersRef.current);
+    await Promise.all(targets.map((peerId) => sendFiletoPeer(file, peerId)))
+  }, [sendFiletoPeer])
+
+  return { peers, signaling, roomCode, selfId, messages, logs, transfers, createRoom, joinRoom, sendMessage, sendFile, acceptFile };
 }

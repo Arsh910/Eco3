@@ -1,16 +1,20 @@
+import { useState, useMemo } from 'react';
 import { useWebRTC } from './hooks/useWebRTC';
 import { ActivityLog } from './components/ActivityLog';
 import { ChatPanel } from './components/ChatPanel';
 import { ConnectionBar } from './components/ConnectionBar';
 import { FilePanel } from './components/FilePanel';
-import { StatusPill } from './components/StatusPill';
+import { PeerList } from './components/PeerList';
+import { Identity } from './components/Identity';
 import { Icon } from './components/Icon';
 import { hasFSA } from './lib/capabilities';
 
 function App() {
   const {
-    status,
+    peers,
+    signaling,
     roomCode,
+    selfId,
     messages,
     logs,
     transfers,
@@ -21,7 +25,29 @@ function App() {
     acceptFile,
   } = useWebRTC();
 
-  const offline = status !== 'connected';
+  const [selected, setSelected] = useState([]);
+  const [alias, setAlias] = useState('');
+
+  const connectedPeers = useMemo(
+    () => peers.filter((p) => p.state === 'connected'),
+    [peers],
+  );
+
+  // Nobody to talk to yet.
+  const offline = connectedPeers.length === 0;
+
+  // Send only to peers that are both selected and actually connected.
+  const targets = useMemo(() => {
+    const connectedIds = connectedPeers.map((p) => p.id);
+    if (selected.length === 0) return connectedIds; // none selected => broadcast
+    return connectedIds.filter((id) => selected.includes(id));
+  }, [connectedPeers, selected]);
+
+  const togglePeer = (id) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
 
   return (
     <div className="app">
@@ -30,7 +56,7 @@ function App() {
           <h1 className="header__title">eco3</h1>
           <p className="header__subtitle">Share text and files directly between peers</p>
         </div>
-        <StatusPill state={status} />
+        <Identity alias={alias} onAlias={setAlias} selfId={selfId} />
       </header>
 
       {!hasFSA && (
@@ -43,17 +69,26 @@ function App() {
 
       <ConnectionBar
         roomCode={roomCode}
-        peer={status}
-        createRoom={createRoom}
-        joinRoom={joinRoom}
+        signaling={signaling}
+        peerCount={connectedPeers.length}
+        createRoom={() => createRoom(alias)}
+        joinRoom={(code) => joinRoom(code, alias)}
       />
 
+      <PeerList peers={peers} selected={selected} onToggle={togglePeer} />
+
       <main className="workspace">
-        <ChatPanel messages={messages} onSend={sendMessage} disabled={offline} />
+        <ChatPanel
+          messages={messages}
+          onSend={(text) => sendMessage(text, targets)}
+          targetCount={targets.length}
+          disabled={offline}
+        />
         <FilePanel
           transfers={transfers}
-          onSend={sendFile}
+          onSend={(file) => sendFile(file, targets)}
           onAccept={acceptFile}
+          targetCount={targets.length}
           disabled={offline}
         />
       </main>

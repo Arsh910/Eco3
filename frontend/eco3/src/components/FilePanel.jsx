@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Icon } from './Icon';
-import { formatBytes } from '../lib/format';
+import { formatBytes, peerLabel } from '../lib/format';
 import { hasFSA } from '../lib/capabilities';
 
 function status(transfer, incoming) {
@@ -12,7 +12,7 @@ function status(transfer, incoming) {
   return incoming ? 'Receiving' : 'Sending';
 }
 
-function Transfer({ id, transfer, onAccept }) {
+function Transfer({ transfer, onAccept }) {
   const incoming = transfer.direction === 'receiving';
   const progressed = (incoming ? transfer.received : transfer.sent) ?? 0;
   const pct = transfer.total ? Math.round((progressed / transfer.total) * 100) : 0;
@@ -29,7 +29,7 @@ function Transfer({ id, transfer, onAccept }) {
           <button
             type="button"
             className="btn btn--sm btn--primary"
-            onClick={() => onAccept(id)}
+            onClick={() => onAccept(transfer.peerId, transfer.fileId)}
             disabled={!hasFSA}
             title={hasFSA ? undefined : 'Requires a Chromium browser'}
           >
@@ -41,7 +41,8 @@ function Transfer({ id, transfer, onAccept }) {
       </div>
 
       <p className="transfer__sub">
-        {status(transfer, incoming)} · {formatBytes(transfer.size)}
+        {status(transfer, incoming)} · {formatBytes(transfer.size)} ·{' '}
+        {incoming ? 'from' : 'to'} {peerLabel(transfer.peerId)}
       </p>
 
       {transfer.accepted && (
@@ -68,7 +69,7 @@ function Transfer({ id, transfer, onAccept }) {
   );
 }
 
-export function FilePanel({ transfers, onSend, onAccept, disabled }) {
+export function FilePanel({ transfers, onSend, onAccept, targetCount, disabled }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const items = Object.entries(transfers);
@@ -88,7 +89,7 @@ export function FilePanel({ transfers, onSend, onAccept, disabled }) {
           {hasFSA ? (
             <p className="panel__meta">
               <Icon name="lock" size={12} />
-              Encrypted peer-to-peer (DTLS)
+              Encrypted · sent to {targetCount === 1 ? '1 peer' : `${targetCount} peers`}
             </p>
           ) : (
             <p className="panel__meta panel__meta--warn">
@@ -147,8 +148,8 @@ export function FilePanel({ transfers, onSend, onAccept, disabled }) {
               </span>
             </div>
           ) : (
-            items.map(([id, transfer]) => (
-              <Transfer key={id} id={id} transfer={transfer} onAccept={onAccept} />
+            items.map(([key, transfer]) => (
+              <Transfer key={key} transfer={transfer} onAccept={onAccept} />
             ))
           )}
         </div>

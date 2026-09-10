@@ -1,6 +1,6 @@
 const STATES = {
   idle: { label: 'Idle', tone: 'idle' },
-  new: { label: 'Idle', tone: 'idle' },
+  new: { label: 'Connecting', tone: 'pending' },
   connecting: { label: 'Connecting', tone: 'pending' },
   connected: { label: 'Connected', tone: 'ok' },
   disconnected: { label: 'Disconnected', tone: 'pending' },
