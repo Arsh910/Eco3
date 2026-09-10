@@ -7,6 +7,11 @@ export function formatBytes(bytes) {
   return `${value.toFixed(i === 0 ? 0 : 1)} ${UNITS[i]}`;
 }
 
+export function peerLabel(id) {
+  const dash = id.indexOf('-');
+  return dash === -1 ? id.slice(0, 8) : `${id.slice(0, dash)}-${id.slice(dash + 1, dash + 5)}`;
+}
+
 export function formatTime(timestamp) {
   return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }

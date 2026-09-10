@@ -35,6 +35,27 @@ const PATHS = {
     </>
   ),
   chevron: <path d="m6 9 6 6 6-6" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  alert: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v6M12 16.5v.5" />
+    </>
+  ),
+  check: <path d="m5 13 4 4L19 7" />,
+  external: (
+    <>
+      <path d="M14 4h6v6" />
+      <path d="M20 4 11 13" />
+      <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="1" />
+      <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 16, className }) {

@@ -1,36 +1,94 @@
+import { useState } from 'react';
 import { Icon } from './Icon';
-import { describeStatus } from '../lib/status';
 
-function Readout({ label, state }) {
-  const { label: text, tone } = describeStatus(state);
+const CODE_LENGTH = 6;
 
-  return (
-    <div>
-      <span className="label">{label}</span>
-      <div className="readout">
-        <span className={`dot dot--${tone}`} />
-        {text}
-      </div>
-    </div>
-  );
-}
+export function ConnectionBar({ roomCode, signaling, peerCount, createRoom, joinRoom }) {
+  const [code, setCode] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
 
-export function ConnectionBar({ signaling, peer, onConnect }) {
-  const busy = peer === 'connecting' || peer === 'connected';
+  const inRoom = Boolean(roomCode);
+  const waiting = inRoom && peerCount === 0;
+
+  const create = async () => {
+    setError('');
+    try {
+      await createRoom();
+    } catch {
+      setError('Could not create a room. Is the signaling server running?');
+    }
+  };
+
+  const join = (event) => {
+    event.preventDefault();
+    setError('');
+    joinRoom(code);
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(roomCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError('Clipboard is blocked. Copy the code manually.');
+    }
+  };
 
   return (
     <section className="connbar">
-      <Readout label="Signaling server" state={signaling} />
-      <Readout label="Peer" state={peer} />
-      <button
-        type="button"
-        className="btn btn--primary"
-        onClick={onConnect}
-        disabled={signaling !== 'open' || busy}
-      >
-        <Icon name="plug" />
-        Connect
-      </button>
+      <div className="connbar__row">
+        <div>
+          <span className="label">Your room code</span>
+          <div className="connbar__field">
+            <div className={`readout connbar__code ${inRoom ? '' : 'connbar__code--empty'}`}>
+              {roomCode ?? '—'.repeat(CODE_LENGTH)}
+            </div>
+            <button
+              type="button"
+              className="btn btn--icon"
+              onClick={copy}
+              disabled={!inRoom}
+              title="Copy room code"
+            >
+              <Icon name={copied ? 'check' : 'copy'} />
+              <span className="sr-only">Copy room code</span>
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={join}>
+          <span className="label">Join a room</span>
+          <div className="connbar__field">
+            <input
+              className="input input--code"
+              value={code}
+              onChange={(event) => setCode(event.target.value.toUpperCase().slice(0, CODE_LENGTH))}
+              placeholder="ENTER CODE"
+              disabled={inRoom}
+              aria-label="Room code to join"
+            />
+            <button type="submit" className="btn" disabled={inRoom || code.length !== CODE_LENGTH}>
+              Join
+            </button>
+          </div>
+        </form>
+
+        <button type="button" className="btn btn--primary" onClick={create} disabled={inRoom}>
+          <Icon name="plus" />
+          Create
+        </button>
+      </div>
+
+      {waiting && (
+        <p className="connbar__hint">
+          {signaling === 'open'
+            ? 'Share the code — waiting for peers to join…'
+            : 'Connecting to the signaling server…'}
+        </p>
+      )}
+      {error && <p className="connbar__error">{error}</p>}
     </section>
   );
 }
