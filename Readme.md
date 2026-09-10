@@ -9,7 +9,6 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vite.dev/)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
 [![Encrypted](https://img.shields.io/badge/Encrypted-DTLS-3ECF8E?style=flat-square&logo=letsencrypt&logoColor=white)](#privacy)
-[![Chromium](https://img.shields.io/badge/Receiving-Chromium_only-D9A441?style=flat-square&logo=googlechrome&logoColor=white)](#browser-support)
 
 <img src="ReadMeImg/1.png" alt="eco3 interface" width="900">
 
