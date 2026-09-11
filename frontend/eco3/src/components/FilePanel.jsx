@@ -49,6 +49,13 @@ function Transfer({ transfer, onAccept }) {
         {incoming ? 'from' : 'to'} {peerLabel(transfer.peerId, transfer.peerAlias)}
       </p>
 
+      {transfer.resumable === false && !transfer.done && (
+        <p className="transfer__warn">
+          <Icon name="alert" size={12} />
+          No checkpoints — this transfer can’t resume if interrupted
+        </p>
+      )}
+
       {transfer.accepted && (
         <div className="track">
           <div
@@ -73,7 +80,7 @@ function Transfer({ transfer, onAccept }) {
   );
 }
 
-export function FilePanel({ transfers, onSend, onAccept, targetCount, disabled }) {
+export function FilePanel({ transfers, onSend, onAccept, targetCount, persist, disabled }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const items = Object.entries(transfers);
@@ -128,6 +135,12 @@ export function FilePanel({ transfers, onSend, onAccept, targetCount, disabled }
             <p className="panel__meta panel__meta--warn">
               <Icon name="alert" size={12} />
               Transfers can’t be resumed in this browser
+            </p>
+          )}
+          {!persist && (
+            <p className="panel__meta panel__meta--warn">
+              <Icon name="alert" size={12} />
+              Progress isn’t saved — interrupted transfers won’t resume later
             </p>
           )}
         </div>

@@ -107,6 +107,7 @@ function App() {
           transfers={transfers}
           onSend={(source) => sendFile(source, targets)}
           onAccept={acceptFile}
+          persist={persist}
           targetCount={targets.length}
           disabled={offline}
         />

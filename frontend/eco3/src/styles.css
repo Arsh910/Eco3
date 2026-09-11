@@ -671,6 +671,15 @@ textarea {
   font-size: 13px;
 }
 
+.transfer__warn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 0 0;
+  color: var(--pending);
+  font-size: 11px;
+}
+
 .transfer__pct {
   font-family: var(--mono);
   font-size: 12px;

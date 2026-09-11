@@ -85,8 +85,8 @@ meantime, you're told so instead of ending up with a mix of two files.
 - Survives reloads, closed tabs, restarts and days away — unfinished transfers are kept for
   30 days
 - Works in **any room**, as long as it's the same two people
-- **Leave** keeps your progress while **Persist progress on leave** is on (the default); turn
-  it off to discard it
+- **Save progress for resume** is on by default. Progress is only saved when both people have
+  it on — if either has it off, eco3 warns you before the transfer starts
 - **Discard** removes a transfer for good — for received files, the partial file is deleted
   too where the browser allows it
 - In Firefox and Safari, the sender picks the same file again to resume (**Select file to

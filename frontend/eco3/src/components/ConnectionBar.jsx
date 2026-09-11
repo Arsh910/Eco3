@@ -97,7 +97,10 @@ export function ConnectionBar({
               : 'Connecting to the signaling server…')}
         </p>
 
-        <label className="toggle" title="Keep partial transfers so they resume when you rejoin">
+        <label
+          className="toggle"
+          title="Lets interrupted transfers resume later, even after a reload. Progress is only saved when both people have this on."
+        >
           <input
             type="checkbox"
             className="toggle__input"
@@ -105,7 +108,7 @@ export function ConnectionBar({
             onChange={(event) => onPersist(event.target.checked)}
           />
           <span className="toggle__track" aria-hidden="true" />
-          Persist progress on leave
+          Save progress for resume
         </label>
       </div>
       {error && <p className="connbar__error">{error}</p>}

@@ -18,6 +18,8 @@ const nameOf = (metaRef, peerId) => peerLabel(peerId, metaRef.current[peerId]?.a
 
 let messageId = 0;
 
+const loadPersist = () => localStorage.getItem('eco3-persist') !== 'off';
+
 export function useWebRTC() {
   const [peers, setPeers] = useState([]); // [{ id, state }]
   const [signaling, setSignaling] = useState('connecting');
@@ -26,7 +28,7 @@ export function useWebRTC() {
   const [messages, setMessages] = useState([]);
   const [logs, setLogs] = useState([]);
   const [transfers, setTransfer] = useState({});
-  const [persist, setPersist] = useState(true);
+  const [persist, setPersistState] = useState(loadPersist);
   const [resumable, setResumable] = useState([]);
   const [resumeBusy, setResumeBusy] = useState(null);
   const [availableMatches, setAvailableMatches] = useState({});
@@ -42,8 +44,14 @@ export function useWebRTC() {
   const sendingRef = useRef({});         // "peerId:fileId" -> { file, meta }
   const peerMetaRef = useRef({});        // peerId -> { alias }
 
+
   const log = useCallback((msg) => {
     setLogs((prev) => [...prev, msg]);
+  }, []);
+
+  const setPersist = useCallback((on) => {
+    localStorage.setItem('eco3-persist', on ? 'on' : 'off');
+    setPersistState(on);
   }, []);
 
   const refreshResumable = useCallback(async () => {
@@ -286,6 +294,7 @@ export function useWebRTC() {
         total: msg.totalChunks,
         done: false,
         accepted: false,
+        resumable: msg.resumable !== false,
         direction: 'receiving',
       });
       log(`incomming file : ${msg.name} (${msg.totalChunks} chunks)`)
@@ -296,7 +305,7 @@ export function useWebRTC() {
       const k = tkey(peerId, msg.fileId);
       const resolver = pendingAcceptRef.current[k];
       if (resolver) {
-        resolver();
+        resolver(msg.resumable !== false);
         delete pendingAcceptRef.current[k];
       }
       return;
@@ -744,26 +753,30 @@ export function useWebRTC() {
     state.writable = await handle.createWritable({ keepExistingData: true });
     state.accepted = true;
 
-    await saveTransfer({
-      transferId: fileId,
-      peerId,
-      peerAlias: peerMetaRef.current[peerId]?.alias ?? null,
-      role: 'receiver',
-      fileName: state.meta.name,
-      fileSize: state.meta.size,
-      chunkSize: state.meta.chunkSize,
-      totalChunks: state.meta.totalChunks,
-      handle,
-      bitmap: state.bitmap,
-      receivedCount: 0,
-      status: 'active',
-      createdAt: Date.now(),
-    });
+    // Checkpoint only when both sides keep progress; either one can opt out.
+    const resumable = persist && state.meta.resumable !== false;
+    if (resumable) {
+      await saveTransfer({
+        transferId: fileId,
+        peerId,
+        peerAlias: peerMetaRef.current[peerId]?.alias ?? null,
+        role: 'receiver',
+        fileName: state.meta.name,
+        fileSize: state.meta.size,
+        chunkSize: state.meta.chunkSize,
+        totalChunks: state.meta.totalChunks,
+        handle,
+        bitmap: state.bitmap,
+        receivedCount: 0,
+        status: 'active',
+        createdAt: Date.now(),
+      });
+    }
 
-    updateTransfer(peerId, fileId, { accepted: true, savedName: handle.name });
-    peersRef.current[peerId]?.control?.send(JSON.stringify({ type: 'file-accept', fileId }));
+    updateTransfer(peerId, fileId, { accepted: true, savedName: handle.name, resumable });
+    peersRef.current[peerId]?.control?.send(JSON.stringify({ type: 'file-accept', fileId, resumable }));
     log(`accepted from ${nameOf(peerMetaRef, peerId)}: ${state.meta.name}`);
-  }, [log, updateTransfer]);
+  }, [log, updateTransfer, persist]);
 
   const sendMessage = useCallback((text, targetIds) => {
     const targets = targetIds?.length ? targetIds : Object.keys(peersRef.current);
@@ -811,24 +824,6 @@ export function useWebRTC() {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     const k = tkey(peerId, fileId);
 
-    // Without a handle (e.g. Firefox) the file can't be reopened after a reload,
-    // so resuming asks the user to pick it again.
-    await saveTransfer({
-      transferId: fileId,
-      peerId,
-      peerAlias: peerMetaRef.current[peerId]?.alias ?? null,
-      role: 'sender',
-      fileName: file.name,
-      fileSize: file.size,
-      chunkSize: CHUNK_SIZE,
-      totalChunks,
-      handle,
-      needsReselect: !handle,
-      bitmap: null,
-      status: 'active',
-      createdAt: Date.now(),
-    });
-
     sendingRef.current[k] = {
       handle,
       file,
@@ -842,6 +837,7 @@ export function useWebRTC() {
       size: file.size,
       totalChunks,
       chunkSize: CHUNK_SIZE,
+      resumable: persist,
     }))
 
     // Shown before the wait so the sender can see the file is pending approval.
@@ -852,10 +848,11 @@ export function useWebRTC() {
       total: totalChunks,
       done: false,
       accepted: false,
+      resumable: persist,
       direction: 'sending',
     })
 
-    await new Promise((resolve, reject) => {
+    const peerResumable = await new Promise((resolve, reject) => {
       pendingAcceptRef.current[k] = resolve;
       setTimeout(() => {
         if (pendingAcceptRef.current[k]) {
@@ -868,7 +865,27 @@ export function useWebRTC() {
     });
 
     log(`peer accepted, sending chunks: ${nameOf(peerMetaRef, peerId)}`);
-    updateTransfer(peerId, fileId, { accepted: true });
+    const resumable = persist && peerResumable;
+    updateTransfer(peerId, fileId, { accepted: true, resumable });
+
+    // Checkpoint only when both sides keep progress. Without a handle (e.g. Firefox) the file can't be reopened after a reload, so resuming asks to pick it again.
+    if (resumable) {
+      await saveTransfer({
+        transferId: fileId,
+        peerId,
+        peerAlias: peerMetaRef.current[peerId]?.alias ?? null,
+        role: 'sender',
+        fileName: file.name,
+        fileSize: file.size,
+        chunkSize: CHUNK_SIZE,
+        totalChunks,
+        handle,
+        needsReselect: !handle,
+        bitmap: null,
+        status: 'active',
+        createdAt: Date.now(),
+      });
+    }
 
     fileChannel.bufferedAmountLowThreshold = BUFFER_LOW_THRESHOLD;
 
@@ -958,7 +975,7 @@ export function useWebRTC() {
       reader.cancel().catch(() => { });
     }
 
-  }, [log, updateTransfer]);
+  }, [log, updateTransfer, persist]);
 
   const sendFile = useCallback(async (source, targetIds) => {
     const targets = targetIds?.length ? targetIds : Object.keys(peersRef.current);
