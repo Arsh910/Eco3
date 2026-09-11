@@ -6,6 +6,7 @@ import { ConnectionBar } from './components/ConnectionBar';
 import { FilePanel } from './components/FilePanel';
 import { PeerList } from './components/PeerList';
 import { Identity } from './components/Identity';
+import { ResumePanel } from './components/ResumePanel';
 import { Icon } from './components/Icon';
 import { hasFSA } from './lib/capabilities';
 
@@ -20,9 +21,17 @@ function App() {
     transfers,
     createRoom,
     joinRoom,
+    leaveRoom,
+    persist,
+    setPersist,
     sendMessage,
     sendFile,
     acceptFile,
+    resumable,
+    resumeBusy,
+    availableMatches,
+    resumeTransfer,
+    discardTransfer,
   } = useWebRTC();
 
   const [selected, setSelected] = useState([]);
@@ -33,7 +42,6 @@ function App() {
     [peers],
   );
 
-  // Nobody to talk to yet.
   const offline = connectedPeers.length === 0;
 
   // Send only to peers that are both selected and actually connected.
@@ -67,12 +75,23 @@ function App() {
         </p>
       )}
 
+      <ResumePanel
+        records={resumable}
+        availableMatches={availableMatches}
+        onResume={resumeTransfer}
+        onDiscard={discardTransfer}
+        busyKey={resumeBusy}
+      />
+
       <ConnectionBar
         roomCode={roomCode}
         signaling={signaling}
         peerCount={connectedPeers.length}
         createRoom={() => createRoom(alias)}
         joinRoom={(code) => joinRoom(code, alias)}
+        leaveRoom={leaveRoom}
+        persist={persist}
+        onPersist={setPersist}
       />
 
       <PeerList peers={peers} selected={selected} onToggle={togglePeer} />
@@ -86,7 +105,7 @@ function App() {
         />
         <FilePanel
           transfers={transfers}
-          onSend={(file) => sendFile(file, targets)}
+          onSend={(source) => sendFile(source, targets)}
           onAccept={acceptFile}
           targetCount={targets.length}
           disabled={offline}

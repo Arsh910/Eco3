@@ -3,7 +3,9 @@ import { Icon } from './Icon';
 
 const CODE_LENGTH = 6;
 
-export function ConnectionBar({ roomCode, signaling, peerCount, createRoom, joinRoom }) {
+export function ConnectionBar({
+  roomCode, signaling, peerCount, createRoom, joinRoom, leaveRoom, persist, onPersist,
+}) {
   const [code, setCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
@@ -75,19 +77,37 @@ export function ConnectionBar({ roomCode, signaling, peerCount, createRoom, join
           </div>
         </form>
 
-        <button type="button" className="btn btn--primary" onClick={create} disabled={inRoom}>
-          <Icon name="plus" />
-          Create
-        </button>
+        {inRoom ? (
+          <button type="button" className="btn" onClick={leaveRoom}>
+            Leave
+          </button>
+        ) : (
+          <button type="button" className="btn btn--primary" onClick={create}>
+            <Icon name="plus" />
+            Create
+          </button>
+        )}
       </div>
 
-      {waiting && (
+      <div className="connbar__foot">
         <p className="connbar__hint">
-          {signaling === 'open'
-            ? 'Share the code — waiting for peers to join…'
-            : 'Connecting to the signaling server…'}
+          {waiting &&
+            (signaling === 'open'
+              ? 'Share the code — waiting for peers to join…'
+              : 'Connecting to the signaling server…')}
         </p>
-      )}
+
+        <label className="toggle" title="Keep partial transfers so they resume when you rejoin">
+          <input
+            type="checkbox"
+            className="toggle__input"
+            checked={persist}
+            onChange={(event) => onPersist(event.target.checked)}
+          />
+          <span className="toggle__track" aria-hidden="true" />
+          Persist progress on leave
+        </label>
+      </div>
       {error && <p className="connbar__error">{error}</p>}
     </section>
   );

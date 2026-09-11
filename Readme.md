@@ -35,10 +35,13 @@ without email limits, cloud accounts, or a USB stick.
 
 - 📡 **Direct transfers** — files stream browser-to-browser, never through a server
 - ♾️ **No size limit** — files are written straight to disk as they arrive, not held in memory
+- ⏯️ **Resume anytime** — an interrupted transfer picks up where it stopped, even days later
+- 🚪 **Leave and come back** — leave a room and keep your progress, or discard it
 - 👥 **Up to 4 people per room** — everyone connects to everyone, not through a host
 - 🎯 **Pick your recipients** — send to the whole room, or select just the people you want
 - ✋ **Accept before you receive** — nothing lands on your disk until you choose where to save it
-- 🏷️ **Name yourself** — set an alias so people see `Arsh-af46` instead of `af46c1d2`
+- 🏷️ **Name yourself** — set an alias so people see `Arsh-af46` instead of `af46c1d2`; change
+  it anytime, you're still recognised as the same person
 - 💬 **Live messaging** — a chat alongside the transfers, over the same connection
 - 🔒 **Encrypted by default** — every connection is DTLS-encrypted end to end
 - 🌑 **Clean dark interface** — one screen, no menus, nothing to configure
@@ -60,17 +63,51 @@ button.
 
 Rooms are temporary. When the last person leaves, the room disappears.
 
+## Resuming transfers
+
+Big transfers get interrupted — a laptop sleeps, a tab closes, Wi-Fi drops. eco3 remembers
+how far each one got, so you only ever send the part that's missing.
+
+**Example: a 40 GB video library over a long weekend**
+
+1. **Friday evening** — you start sending the library to a friend. At 60%, your laptop's
+   battery dies.
+2. **Monday morning** — you both open eco3 again. The transfer is waiting at the top under
+   **Unfinished transfers**, marked **Waiting for peer**.
+3. **Reconnect** — create a room (a brand-new code is fine) and your friend joins. As soon as
+   you're both in, eco3 recognises the transfer on both sides and **Resume** unlocks.
+4. **Resume** — click it on both ends. The browser asks permission to reopen the file (that's
+   what **Resume (grant access)** means), and only the missing 40% is sent.
+
+Before continuing, eco3 checks it's the exact same file. If it was edited or replaced in the
+meantime, you're told so instead of ending up with a mix of two files.
+
+- Survives reloads, closed tabs, restarts and days away — unfinished transfers are kept for
+  30 days
+- Works in **any room**, as long as it's the same two people
+- **Leave** keeps your progress while **Persist progress on leave** is on (the default); turn
+  it off to discard it
+- **Discard** removes a transfer for good — for received files, the partial file is deleted
+  too where the browser allows it
+- In Firefox and Safari, the sender picks the same file again to resume (**Select file to
+  resume**)
+
+> **Note**
+> The sender's percentage under **Unfinished transfers** is the last progress the receiver
+> reported, so it can trail the receiver's by a few seconds of transfer. It catches up as soon
+> as you reconnect, and resuming always goes by what the receiver actually has.
+
 ## Browser support
 
 Sending files and messaging work in **every modern browser**. Receiving files needs the
 [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API),
 which is currently Chromium-only.
 
-| Browser | Send files | Receive files | Messaging |
-| :--- | :---: | :---: | :---: |
-| Chrome, Edge, Brave, Arc, Opera | ✅ | ✅ | ✅ |
-| Firefox | ✅ | ❌ | ✅ |
-| Safari | ✅ | ❌ | ✅ |
+| Browser | Send files | Receive files | Resume | Messaging |
+| :--- | :---: | :---: | :---: | :---: |
+| Chrome, Edge, Brave, Arc, Opera | ✅ | ✅ | ✅ | ✅ |
+| Firefox | ✅ | ❌ | Sending, by re-selecting the file | ✅ |
+| Safari | ✅ | ❌ | Sending, by re-selecting the file | ✅ |
 
 > **Note**
 > eco3 detects this on load. In Firefox or Safari you'll see a banner explaining the
@@ -87,7 +124,9 @@ of gigabytes and risks crashing the tab.
 
 - Files and messages travel **directly between browsers**, encrypted with DTLS
 - The server only helps two browsers find each other — it never sees file contents
-- Nothing is stored anywhere; close the tab and it's gone
+- Nothing is stored on a server. To make resuming possible, your browser keeps a note of
+  unfinished transfers (file name, size, progress) — only on your device, cleared after 30
+  days or when you discard them
 - No accounts, no sign-in, no tracking
 
 Peers on restrictive networks may not be able to reach each other directly, since eco3 uses
@@ -121,6 +160,9 @@ other.
 - **4 people per room** — beyond that, the number of direct connections each browser has to
   maintain starts to hurt
 - **One file at a time** per sender
-- **Rooms are not persistent** — codes are not reusable once everyone leaves
+- **Rooms are not persistent** — codes are not reusable once everyone leaves (transfers still
+  resume in a new room)
+- **Resume needs the same browser** on both ends — clearing site data or switching browsers
+  starts fresh
 - **No relay fallback** — a symmetric NAT or strict corporate firewall on both ends can
   block the direct connection

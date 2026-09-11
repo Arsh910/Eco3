@@ -1,10 +1,14 @@
 import { useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { formatBytes, peerLabel } from '../lib/format';
-import { hasFSA } from '../lib/capabilities';
+import { hasFSA, hasOpenPicker, canPersistTransfers } from '../lib/capabilities';
+import { pickFiles } from '../lib/filePicker';
 
 function status(transfer, incoming) {
   if (transfer.done) return 'Complete';
+  if (transfer.resending) return `Resuming ${transfer.resent}/${transfer.resendTotal} chunks`;
+  if (transfer.paused) return 'Paused';
+  if (transfer.interrupted) return 'Interrupted resumes on reconnect';
   if (!transfer.accepted) {
     if (!incoming) return 'Waiting for peer';
     return hasFSA ? 'Waiting for you' : 'Cannot receive in this browser';
@@ -42,13 +46,13 @@ function Transfer({ transfer, onAccept }) {
 
       <p className="transfer__sub">
         {status(transfer, incoming)} · {formatBytes(transfer.size)} ·{' '}
-        {incoming ? 'from' : 'to'} {peerLabel(transfer.peerId)}
+        {incoming ? 'from' : 'to'} {peerLabel(transfer.peerId, transfer.peerAlias)}
       </p>
 
       {transfer.accepted && (
         <div className="track">
           <div
-            className={`track__fill ${transfer.done ? 'track__fill--done' : ''}`}
+            className={`track__fill ${transfer.done ? 'track__fill--done' : ''} ${transfer.interrupted || transfer.paused ? 'track__fill--stalled' : ''}`}
             style={{ width: `${transfer.done ? 100 : pct}%` }}
           />
         </div>
@@ -74,11 +78,35 @@ export function FilePanel({ transfers, onSend, onAccept, targetCount, disabled }
   const [dragging, setDragging] = useState(false);
   const items = Object.entries(transfers);
 
-  const handleDrop = (event) => {
+  const handleDrop = async (event) => {
     event.preventDefault();
     setDragging(false);
-    const file = event.dataTransfer.files[0];
-    if (file && !disabled) onSend(file);
+    if (disabled) return;
+
+    const item = event.dataTransfer.items?.[0];
+    const droppedFile = event.dataTransfer.files?.[0];
+
+    if (!item || item.kind !== 'file') return;
+
+    if (typeof item.getAsFileSystemHandle === 'function') {
+      const handle = await item.getAsFileSystemHandle();
+      if (handle?.kind === 'file') onSend(handle);
+      return;
+    }
+
+    // No handle support: send the plain File (it can't be resumed after a refresh).
+    if (droppedFile) onSend(droppedFile);
+  };
+
+  const choose = async () => {
+    if (disabled) return;
+    if (hasOpenPicker) {
+      const [handle] = await pickFiles();
+      if (handle) onSend(handle);
+    }
+    else {
+      inputRef.current?.click();
+    }
   };
 
   return (
@@ -86,22 +114,27 @@ export function FilePanel({ transfers, onSend, onAccept, targetCount, disabled }
       <header className="panel__head">
         <div>
           <h2 className="panel__title">Files</h2>
-          {hasFSA ? (
+          {canPersistTransfers ? (
             <p className="panel__meta">
               <Icon name="lock" size={12} />
               Encrypted · sent to {targetCount === 1 ? '1 peer' : `${targetCount} peers`}
             </p>
-          ) : (
+          ) : !hasFSA ? (
             <p className="panel__meta panel__meta--warn">
               <Icon name="alert" size={12} />
               Send only — this browser can’t receive files
+            </p>
+          ) : (
+            <p className="panel__meta panel__meta--warn">
+              <Icon name="alert" size={12} />
+              Transfers can’t be resumed in this browser
             </p>
           )}
         </div>
         <button
           type="button"
           className="btn btn--primary"
-          onClick={() => inputRef.current?.click()}
+          onClick={choose}
           disabled={disabled}
         >
           <Icon name="upload" />
@@ -131,9 +164,8 @@ export function FilePanel({ transfers, onSend, onAccept, targetCount, disabled }
         onDrop={handleDrop}
       >
         <div
-          className={`dropzone ${items.length > 0 ? 'dropzone--filled' : ''} ${
-            dragging ? 'dropzone--active' : ''
-          }`}
+          className={`dropzone ${items.length > 0 ? 'dropzone--filled' : ''} ${dragging ? 'dropzone--active' : ''
+            }`}
         >
           {items.length === 0 ? (
             <div className="empty">

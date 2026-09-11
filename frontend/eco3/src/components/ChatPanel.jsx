@@ -46,7 +46,7 @@ export function ChatPanel({ messages, onSend, targetCount, disabled }) {
                 className={`bubble ${message.from === 'me' ? 'bubble--me' : ''}`}
               >
                 {message.from !== 'me' && (
-                  <span className="bubble__from">{peerLabel(message.from)}</span>
+                  <span className="bubble__from">{peerLabel(message.from, message.alias)}</span>
                 )}
                 {message.text}
                 <span className="bubble__time">{formatTime(message.at)}</span>
