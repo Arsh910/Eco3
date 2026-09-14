@@ -2,8 +2,7 @@
 :root {
   color-scheme: dark;
 
-  --bg: #0a0b0d;
-  --frame: #101115;
+  --bg: #101115;
   --surface: #17191e;
   --surface-2: #20232a;
   --surface-3: #2a2e36;
@@ -31,6 +30,7 @@
   --r-md: 20px;
   --r-lg: 32px;
   --gap: 16px;
+  --page: 1440px;
 
   --font: 'Outfit Variable', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
@@ -73,16 +73,14 @@ textarea {
   background: var(--accent-soft);
 }
 
-/* layout: a rounded frame, like the marketing pages */
+/* layout */
 .app {
-  max-width: 1240px;
-  margin: 16px auto;
-  padding: 28px 32px 32px;
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 28px 32px 40px;
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  background: var(--frame);
-  border-radius: var(--r-lg);
 }
 
 .header {
@@ -202,9 +200,7 @@ textarea {
 
 @media (max-width: 600px) {
   .app {
-    margin: 0;
     padding: 20px 16px;
-    border-radius: 0;
   }
 
   .identity {

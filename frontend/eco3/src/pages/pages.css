@@ -1,11 +1,10 @@
 /* Marketing pages. Tokens and .btn come from styles.css; everything here is scoped to .site. */
 
+/* full-width page; header, main and footer keep their content in a centred column */
 .site {
-  max-width: 1240px;
-  margin: 16px auto;
-  overflow: hidden;
-  background: var(--frame);
-  border-radius: var(--r-lg);
+  --gutter: max(32px, calc((100% - var(--page)) / 2));
+
+  overflow-x: clip;
   font-size: 16px;
   line-height: 1.6;
 }
@@ -88,7 +87,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px 32px;
-  padding: 24px 32px;
+  padding: 24px var(--gutter);
 }
 
 .site__brand {
@@ -121,7 +120,7 @@
 }
 
 .site__main {
-  padding: 0 32px 120px;
+  padding: 0 var(--gutter) 120px;
 }
 
 /* hero */
@@ -464,7 +463,7 @@
 .stack__circle {
   position: absolute;
   top: 50%;
-  right: -200px;
+  left: 300px;
   width: 400px;
   height: 400px;
   background: var(--accent);
@@ -715,7 +714,7 @@
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 32px;
-  padding: 64px 72px;
+  padding: 64px var(--gutter);
   background: #07080a;
   color: var(--text-faint);
   font-size: 15px;
@@ -808,21 +807,14 @@
   }
 
   .site__footer {
-    padding: 48px 32px;
+    padding-block: 48px;
   }
 }
 
 /* phone */
 @media (max-width: 600px) {
   .site {
-    margin: 0;
-    border-radius: 0;
-  }
-
-  .site__header,
-  .site__main {
-    padding-left: 16px;
-    padding-right: 16px;
+    --gutter: 16px;
   }
 
   .site__nav {
@@ -899,11 +891,11 @@
   }
 
   .stack__circle {
-    right: -240px;
+    left: 55%;
   }
 
   .site__footer {
     grid-template-columns: minmax(0, 1fr);
-    padding: 40px 22px;
+    padding-block: 40px;
   }
 }
