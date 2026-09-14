@@ -9,8 +9,9 @@ import { saveTransfer, patchTransfer, deleteTransfer, listTransfers, pruneOld } 
 import { loadResumable, grantPermission } from '../lib/resume';
 import { detectNatType } from '../lib/natDetect';
 
-const BASE_SOCKET_URL = `ws://localhost:8080/api/v1`
-const BASE_API_URL = `http://localhost:8080/api/v1`
+const BASE_SOCKET_URL = import.meta.env.VITE_SOCKET_URL
+const BASE_API_URL = import.meta.env.VITE_API_URL
+
 const CHUNK_SIZE = 64 * 1024;
 const BUFFER_LOW_THRESHOLD = CHUNK_SIZE * 4;
 const PREVIEWABLE = /^(image|video|audio|text)\/|^application\/pdf$/;
