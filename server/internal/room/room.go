@@ -3,6 +3,7 @@ package room
 import (
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 
@@ -21,9 +22,10 @@ var (
 )
 
 type Peer struct {
-	ID   string
-	Conn *websocket.Conn
-	mu   sync.Mutex
+	ID    string
+	Alias string
+	Conn  *websocket.Conn
+	mu    sync.Mutex
 }
 
 type Room struct {
@@ -119,15 +121,31 @@ func (rm *RoomManger) RemoveRoomIfEmpty(code string) {
 
 func (r *Room) JoinRoom(peer *Peer) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
-	if len(r.peers) >= maxRoomMembers {
+	old, isReconnect := r.peers[peer.ID]
+
+	if !isReconnect && len(r.peers) >= maxRoomMembers {
+		r.mu.Unlock()
 		return ErrRoomFull
 	}
 
-	exsisting := make([]string, 0, len(r.peers))
-	for id := range r.peers {
-		exsisting = append(exsisting, id)
+	exsisting := make([]map[string]string, 0, len(r.peers))
+	targets := make([]*Peer, 0, len(r.peers))
+
+	for id, p := range r.peers {
+		if id == peer.ID {
+			continue
+		}
+		exsisting = append(exsisting, map[string]string{"id": p.ID, "alias": p.Alias})
+		targets = append(targets, p)
+	}
+
+	r.peers[peer.ID] = peer
+	r.mu.Unlock()
+
+	if isReconnect && old.Conn != peer.Conn {
+		old.Conn.Close()
+		fmt.Println("replaced stale connection for peer: ", peer.ID)
 	}
 
 	peer.Send(map[string]any{
@@ -136,15 +154,16 @@ func (r *Room) JoinRoom(peer *Peer) error {
 		"self":  peer.ID,
 	})
 
-	for _, p := range r.peers {
+	// targets is the snapshot taken under the lock: everyone but the joiner.
+	for _, p := range targets {
 		p.Send(map[string]any{
 			"type":   "peer-joined",
 			"peerId": peer.ID,
+			"alias":  peer.Alias,
 		})
 	}
 
-	r.peers[peer.ID] = peer
-	log.Println("peer joined room", r.Code, "| total peers: ", len(r.peers))
+	log.Println("peer joined room", r.Code, "| total peers: ", len(targets)+1)
 
 	return nil
 }
@@ -164,8 +183,15 @@ func (r *Room) RouteTo(targetID string, msg []byte) {
 	target.Conn.WriteMessage(websocket.TextMessage, msg)
 }
 
-func (r *Room) LeaveRoom(peerId string) {
+func (r *Room) LeaveRoom(peerId string, conn *websocket.Conn) {
 	r.mu.Lock()
+
+	current, ok := r.peers[peerId]
+	if !ok || current.Conn != conn {
+		r.mu.Unlock()
+		return // already replaced by a newer connection
+	}
+
 	delete(r.peers, peerId)
 	remaining := make([]*Peer, 0, len(r.peers))
 
@@ -181,5 +207,5 @@ func (r *Room) LeaveRoom(peerId string) {
 		})
 	}
 
-	log.Println("peer left room", r.Code, "| total peers: ", len(r.peers))
+	log.Println("peer left room", r.Code, "| total peers: ", len(remaining))
 }

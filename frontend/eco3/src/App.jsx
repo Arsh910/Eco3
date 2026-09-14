@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import '@fontsource-variable/outfit';
 import { useWebRTC } from './hooks/useWebRTC';
 import { ActivityLog } from './components/ActivityLog';
 import { ChatPanel } from './components/ChatPanel';
@@ -6,8 +8,11 @@ import { ConnectionBar } from './components/ConnectionBar';
 import { FilePanel } from './components/FilePanel';
 import { PeerList } from './components/PeerList';
 import { Identity } from './components/Identity';
+import { ResumePanel } from './components/ResumePanel';
+import { NatBanner } from './components/NatBanner';
 import { Icon } from './components/Icon';
 import { hasFSA } from './lib/capabilities';
+import logo from './assets/site/logo.webp';
 
 function App() {
   const {
@@ -20,9 +25,18 @@ function App() {
     transfers,
     createRoom,
     joinRoom,
+    leaveRoom,
+    persist,
+    setPersist,
     sendMessage,
     sendFile,
     acceptFile,
+    resumable,
+    resumeBusy,
+    availableMatches,
+    natType,
+    resumeTransfer,
+    discardTransfer,
   } = useWebRTC();
 
   const [selected, setSelected] = useState([]);
@@ -33,7 +47,6 @@ function App() {
     [peers],
   );
 
-  // Nobody to talk to yet.
   const offline = connectedPeers.length === 0;
 
   // Send only to peers that are both selected and actually connected.
@@ -53,7 +66,12 @@ function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1 className="header__title">eco3</h1>
+          <h1 className="header__title">
+            <Link to="/" className="header__brand">
+              <img src={logo} alt="" width="36" height="36" />
+              eco3
+            </Link>
+          </h1>
           <p className="header__subtitle">Share text and files directly between peers</p>
         </div>
         <Identity alias={alias} onAlias={setAlias} selfId={selfId} />
@@ -67,12 +85,25 @@ function App() {
         </p>
       )}
 
+      <NatBanner natType={natType} />
+
+      <ResumePanel
+        records={resumable}
+        availableMatches={availableMatches}
+        onResume={resumeTransfer}
+        onDiscard={discardTransfer}
+        busyKey={resumeBusy}
+      />
+
       <ConnectionBar
         roomCode={roomCode}
         signaling={signaling}
         peerCount={connectedPeers.length}
         createRoom={() => createRoom(alias)}
         joinRoom={(code) => joinRoom(code, alias)}
+        leaveRoom={leaveRoom}
+        persist={persist}
+        onPersist={setPersist}
       />
 
       <PeerList peers={peers} selected={selected} onToggle={togglePeer} />
@@ -86,8 +117,9 @@ function App() {
         />
         <FilePanel
           transfers={transfers}
-          onSend={(file) => sendFile(file, targets)}
+          onSend={(source) => sendFile(source, targets)}
           onAccept={acceptFile}
+          persist={persist}
           targetCount={targets.length}
           disabled={offline}
         />

@@ -7,9 +7,9 @@ export function formatBytes(bytes) {
   return `${value.toFixed(i === 0 ? 0 : 1)} ${UNITS[i]}`;
 }
 
-export function peerLabel(id) {
-  const dash = id.indexOf('-');
-  return dash === -1 ? id.slice(0, 8) : `${id.slice(0, dash)}-${id.slice(dash + 1, dash + 5)}`;
+// Display only: the id is identity, the alias is a changeable name.
+export function peerLabel(id, alias) {
+  return alias ? `${alias}-${id.slice(0, 4)}` : id.slice(0, 8);
 }
 
 export function formatTime(timestamp) {

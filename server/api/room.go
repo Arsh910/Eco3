@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,13 +16,10 @@ func (app *application) HandleCreateRoom(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"code": room.Code})
 }
 
-func generatePeerID() string {
-	b := make([]byte, 8)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-const maxAliasLength = 12
+const (
+	maxAliasLength  = 12
+	maxPeerIDLength = 64
+)
 
 func sanitizeAlias(raw string) string {
 	var b strings.Builder
@@ -39,23 +34,25 @@ func sanitizeAlias(raw string) string {
 	return b.String()
 }
 
-func peerID(alias string) string {
-	id := generatePeerID()
-	if alias = sanitizeAlias(alias); alias != "" {
-		return alias + "-" + id
-	}
-	return id
-}
-
 type SignalMessage struct {
-	Type string          `json:"type"`
-	To   string          `json:"to"`
-	From string          `json:"from"`
-	Raw  json.RawMessage `json:"-"`
+	Type string `json:"type"`
+	To   string `json:"to"`
+	From string `json:"from"`
 }
 
 func (app *application) handleJoinRoom(c *gin.Context) {
 	code := c.Param("code")
+	peerId := c.Query("peerId")
+
+	if peerId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "peerId required"})
+		return
+	}
+
+	if len(peerId) > maxPeerIDLength {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "peerId too long"})
+		return
+	}
 
 	rom, err := app.rm.GetRoom(code)
 	if err != nil {
@@ -71,8 +68,9 @@ func (app *application) handleJoinRoom(c *gin.Context) {
 	defer conn.Close()
 
 	peer := &room.Peer{
-		ID:   peerID(c.Query("alias")),
-		Conn: conn,
+		ID:    peerId,
+		Alias: sanitizeAlias(c.Query("alias")),
+		Conn:  conn,
 	}
 
 	if err := rom.JoinRoom(peer); err != nil {
@@ -80,8 +78,10 @@ func (app *application) handleJoinRoom(c *gin.Context) {
 		return
 	}
 
-	defer rom.LeaveRoom(peer.ID)
-	defer app.rm.RemoveRoomIfEmpty(code)
+	defer func() {
+		rom.LeaveRoom(peer.ID, conn)
+		app.rm.RemoveRoomIfEmpty(code)
+	}()
 
 	for {
 		_, raw, err := conn.ReadMessage()

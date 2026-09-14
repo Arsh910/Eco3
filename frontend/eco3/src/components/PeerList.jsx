@@ -30,7 +30,7 @@ export function PeerList({ peers, selected, onToggle }) {
               title={connected ? 'Click to select' : label}
             >
               <span className={`dot dot--${tone}`} />
-              <span className="peer__id">{peerLabel(peer.id)}</span>
+              <span className="peer__id">{peerLabel(peer.id, peer.alias)}</span>
               {!connected && <span className="peer__state">{label}</span>}
             </button>
           );
