@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import '@fontsource-variable/outfit';
 import { useWebRTC } from './hooks/useWebRTC';
 import { ActivityLog } from './components/ActivityLog';
 import { ChatPanel } from './components/ChatPanel';
@@ -7,8 +9,10 @@ import { FilePanel } from './components/FilePanel';
 import { PeerList } from './components/PeerList';
 import { Identity } from './components/Identity';
 import { ResumePanel } from './components/ResumePanel';
+import { NatBanner } from './components/NatBanner';
 import { Icon } from './components/Icon';
 import { hasFSA } from './lib/capabilities';
+import logo from './assets/site/logo.webp';
 
 function App() {
   const {
@@ -30,6 +34,7 @@ function App() {
     resumable,
     resumeBusy,
     availableMatches,
+    natType,
     resumeTransfer,
     discardTransfer,
   } = useWebRTC();
@@ -61,7 +66,12 @@ function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1 className="header__title">eco3</h1>
+          <h1 className="header__title">
+            <Link to="/" className="header__brand">
+              <img src={logo} alt="" width="36" height="36" />
+              eco3
+            </Link>
+          </h1>
           <p className="header__subtitle">Share text and files directly between peers</p>
         </div>
         <Identity alias={alias} onAlias={setAlias} selfId={selfId} />
@@ -74,6 +84,8 @@ function App() {
           (Chrome, Edge, Brave, Arc) to receive — sending and chat work here.
         </p>
       )}
+
+      <NatBanner natType={natType} />
 
       <ResumePanel
         records={resumable}

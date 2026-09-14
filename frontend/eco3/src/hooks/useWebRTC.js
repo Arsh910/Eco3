@@ -7,6 +7,7 @@ import { ensureReadPermission, isHandle } from '../lib/filePicker'
 import { createBitmap, hasBit, setBit, countBits, missingChunks } from '../lib/bitmap'
 import { saveTransfer, patchTransfer, deleteTransfer, listTransfers, pruneOld } from '../lib/transferStore'
 import { loadResumable, grantPermission } from '../lib/resume';
+import { detectNatType } from '../lib/natDetect';
 
 const BASE_SOCKET_URL = `ws://localhost:8080/api/v1`
 const BASE_API_URL = `http://localhost:8080/api/v1`
@@ -32,6 +33,7 @@ export function useWebRTC() {
   const [resumable, setResumable] = useState([]);
   const [resumeBusy, setResumeBusy] = useState(null);
   const [availableMatches, setAvailableMatches] = useState({});
+  const [natType, setNatType] = useState('unknown');
 
   const wsRef = useRef(null);
   const selfIdRef = useRef(null);
@@ -483,6 +485,30 @@ export function useWebRTC() {
     log(`announced ${entries.length} resumable transfer(s) to ${nameOf(peerMetaRef, peerId)}`);
   }, [log]);
 
+  // What a connection actually uses: host (same network), srflx/prflx (through NAT), relay (TURN).
+  // Logged so the NAT detector can be checked against reality before anything is gated on it.
+  const reportConnectionType = useCallback(async (peerId) => {
+    const pc = peersRef.current[peerId]?.pc;
+    if (!pc) return;
+
+    const stats = await pc.getStats();
+    let pair = null;
+    stats.forEach((r) => {
+      if (r.type === 'transport' && r.selectedCandidatePairId) pair = stats.get(r.selectedCandidatePairId);
+    });
+    if (!pair) {
+      // Browsers without transport stats (e.g. Firefox) flag the pair itself.
+      stats.forEach((r) => {
+        if (r.type === 'candidate-pair' && r.state === 'succeeded' && (r.nominated || r.selected)) pair = r;
+      });
+    }
+
+    const local = pair && stats.get(pair.localCandidateId)?.candidateType;
+    const remote = pair && stats.get(pair.remoteCandidateId)?.candidateType;
+    log(`connection type with ${nameOf(peerMetaRef, peerId)}: ${local ?? 'unknown'} ↔ ${remote ?? 'unknown'}`);
+    return local ?? null;
+  }, [log]);
+
   const createPeerConnection = useCallback((peerId, isOfferer) => {
     const existing = peersRef.current[peerId];
     if (existing) return existing;
@@ -504,6 +530,7 @@ export function useWebRTC() {
       setPeers((prev) =>
         prev.map((p) => (p.id === peerId ? { ...p, state: pc.connectionState } : p))
       );
+      if (pc.connectionState === 'connected') reportConnectionType(peerId).catch(() => { });
     }
 
     const wireControl = (ch) => {
@@ -540,7 +567,7 @@ export function useWebRTC() {
 
     return entry;
 
-  }, [log, handleControlMessage, handleFileChunck, announceResumable]);
+  }, [log, handleControlMessage, handleFileChunck, announceResumable, reportConnectionType]);
 
   const connectToRoom = useCallback((code, alias) => {
     setRoomCode(code);
@@ -1135,5 +1162,13 @@ export function useWebRTC() {
     pruneOld().catch(() => { });
   }, [refreshResumable]);
 
-  return { peers, signaling, roomCode, selfId, messages, logs, transfers, createRoom, joinRoom, leaveRoom, persist, setPersist, sendMessage, sendFile, acceptFile, resumable, resumeBusy, availableMatches, resumeTransfer, discardTransfer };
+  // Once per page: the result belongs to this network, not to any peer.
+  useEffect(() => {
+    detectNatType().then((type) => {
+      setNatType(type);
+      log(`network check: ${type}`);
+    });
+  }, [log]);
+
+  return { peers, signaling, roomCode, selfId, messages, logs, transfers, createRoom, joinRoom, leaveRoom, persist, setPersist, sendMessage, sendFile, acceptFile, resumable, resumeBusy, availableMatches, resumeTransfer, discardTransfer, natType };
 }

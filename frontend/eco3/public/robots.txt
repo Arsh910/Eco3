@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://eco3.app/sitemap.xml
