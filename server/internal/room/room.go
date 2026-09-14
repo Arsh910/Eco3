@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -43,6 +44,13 @@ func (p *Peer) Send(v any) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.Conn.WriteJSON(v)
+}
+
+func (p *Peer) Ping() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	return p.Conn.WriteMessage(websocket.PingMessage, nil)
 }
 
 func NewRoomManager() *RoomManger {

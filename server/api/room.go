@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"server/internal/room"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -40,6 +41,11 @@ type SignalMessage struct {
 	From string `json:"from"`
 }
 
+const (
+	pongWait   = 60 * time.Second
+	pingPeriod = 25 * time.Second
+)
+
 func (app *application) handleJoinRoom(c *gin.Context) {
 	code := c.Param("code")
 	peerId := c.Query("peerId")
@@ -61,11 +67,18 @@ func (app *application) handleJoinRoom(c *gin.Context) {
 	}
 
 	conn, err := app.upg.Upgrade(c.Writer, c.Request, nil)
+
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "something wrong while connecting to socket"})
+		log.Println("upgrade error:", err)
 		return
 	}
 	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 
 	peer := &room.Peer{
 		ID:    peerId,
@@ -81,6 +94,24 @@ func (app *application) handleJoinRoom(c *gin.Context) {
 	defer func() {
 		rom.LeaveRoom(peer.ID, conn)
 		app.rm.RemoveRoomIfEmpty(code)
+	}()
+
+	done := make(chan struct{})
+	defer close(done)
+
+	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := peer.Ping(); err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
 	}()
 
 	for {
