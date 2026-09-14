@@ -64,6 +64,12 @@ func GenerateRoomCode() string {
 	return string(code)
 }
 
+func (rm *RoomManger) Count() int {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	return len(rm.rooms)
+}
+
 func (rm *RoomManger) CreateRoom() *Room {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
