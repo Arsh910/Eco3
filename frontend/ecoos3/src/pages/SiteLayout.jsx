@@ -9,8 +9,8 @@ function Brand() {
   return (
     <Link to="/" className="site__brand">
       <img src={logo} alt="" width="28" height="28" />
-      eco3
-    </Link>
+      ecoos3
+</Link>
   );
 }
 
@@ -33,7 +33,7 @@ export function SiteLayout({ title, description, path, children }) {
           <NavLink to="/how-it-works">How it works</NavLink>
           <NavLink to="/large-file-transfer">Large file transfer</NavLink>
         </nav>
-        <Link to="/app" className="btn btn--light">Open eco3</Link>
+        <Link to="/app" className="btn btn--light">Open ecoos3</Link>
       </header>
 
       <main className="site__main">{children}</main>
@@ -51,7 +51,7 @@ export function SiteLayout({ title, description, path, children }) {
         <nav className="site__footer-col" aria-label="Product">
           <p className="site__footer-title">Product</p>
           <Link to="/">Home</Link>
-          <Link to="/app">Open eco3</Link>
+          <Link to="/app">Open ecoos3</Link>
         </nav>
       </footer>
     </div>

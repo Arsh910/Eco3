@@ -1,4 +1,4 @@
-const KEY = 'eco3-peer-id';
+const KEY = 'ecoos3-peer-id';
 
 export function getPeerId() {
   let id = localStorage.getItem(KEY)

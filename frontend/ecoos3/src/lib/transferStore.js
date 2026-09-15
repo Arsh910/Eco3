@@ -1,4 +1,4 @@
-const DB_NAME = 'eco3';
+const DB_NAME = 'ecoos3';
 const DB_VERSION = 1;
 const STORE = 'transfers';
 

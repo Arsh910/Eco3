@@ -22,7 +22,7 @@ export function LargeFileTransfer() {
     <SiteLayout
       path="/large-file-transfer"
       title="How to transfer large files: the options compared"
-      description="Cloud storage, physical drives, FTP and direct peer-to-peer transfer compared honestly — including when a direct transfer tool like eco3 is the wrong choice."
+      description="Cloud storage, physical drives, FTP and direct peer-to-peer transfer compared honestly — including when a direct transfer tool like ecoos3 is the wrong choice."
     >
       <article className="prose">
         <h1>How to transfer large files</h1>
@@ -58,7 +58,7 @@ export function LargeFileTransfer() {
 
         <h2 id="p2p">Direct peer-to-peer transfer</h2>
         <p>
-          Tools like <Link to="/">eco3</Link> connect the two computers directly, so the file goes from
+          Tools like <Link to="/">ecoos3</Link> connect the two computers directly, so the file goes from
           one disk to the other without being stored anywhere in between.
         </p>
         <ul>
@@ -75,7 +75,7 @@ export function LargeFileTransfer() {
                 <th scope="col">Cloud upload</th>
                 <th scope="col">Physical drive</th>
                 <th scope="col">FTP / self-hosted</th>
-                <th scope="col">Direct (eco3)</th>
+                <th scope="col">Direct (ecoos3)</th>
               </tr>
             </thead>
             <tbody>
@@ -122,7 +122,7 @@ export function LargeFileTransfer() {
           protocol overhead and other traffic on the connection.
         </p>
 
-        <h2 id="right">When eco3 is a good choice</h2>
+        <h2 id="right">When ecoos3 is a good choice</h2>
         <ul>
           <li>The file is bigger than your cloud plan allows, and you don’t want to pay for more storage just to send it once.</li>
           <li>You and the recipient can be online together — even in short sessions, because transfers resume where they stopped.</li>
@@ -130,9 +130,9 @@ export function LargeFileTransfer() {
           <li>You’re on the same network, where a direct transfer runs at full local speed.</li>
         </ul>
 
-        <h2 id="wrong">When eco3 is the wrong choice</h2>
+        <h2 id="wrong">When ecoos3 is the wrong choice</h2>
         <ul>
-          <li><strong>The recipient can’t be online when you are.</strong> eco3 has nowhere to leave a file. Use cloud storage or a sending link.</li>
+          <li><strong>The recipient can’t be online when you are.</strong> ecoos3 has nowhere to leave a file. Use cloud storage or a sending link.</li>
           <li><strong>You’re sending one file to many people.</strong> A room holds four people, and each recipient gets their own stream from your upload. A shared link scales much better.</li>
           <li><strong>The recipient uses Firefox or Safari.</strong> Receiving needs a Chromium browser, so they’d need Chrome, Edge, Brave or Arc.</li>
           <li><strong>Either of you is on a network that blocks direct connections</strong>, such as a strict corporate firewall. Until relay support arrives, use cloud storage or a drive.</li>
@@ -141,7 +141,7 @@ export function LargeFileTransfer() {
 
         <p className="cta">
           <Link to="/app" className="btn btn--primary">Start a transfer</Link>
-          <Link to="/how-it-works" className="btn">How eco3 works</Link>
+          <Link to="/how-it-works" className="btn">How ecoos3 works</Link>
         </p>
       </article>
     </SiteLayout>

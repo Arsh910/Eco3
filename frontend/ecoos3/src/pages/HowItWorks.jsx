@@ -61,13 +61,13 @@ export function HowItWorks() {
   return (
     <SiteLayout
       path="/how-it-works"
-      title="How eco3 works: direct browser-to-browser file transfer"
+      title="How ecoos3 works: direct browser-to-browser file transfer"
       description="What the signaling server sees, how two browsers connect through NAT, why some networks fail, and how chunked transfers resume after an interruption."
     >
       <article className="prose">
-        <h1>How eco3 works</h1>
+        <h1>How ecoos3 works</h1>
         <p className="section__lead">
-          eco3 sends files directly between two browsers using WebRTC, the same technology browsers
+          ecoos3 sends files directly between two browsers using WebRTC, the same technology browsers
           use for video calls. This page explains what happens along the way, including the parts
           that don’t always work.
         </p>
@@ -76,7 +76,7 @@ export function HowItWorks() {
 
         <h2 id="no-server">Why your files don’t touch a server</h2>
         <p>
-          Once two browsers are connected, eco3 opens WebRTC <em>data channels</em> between them. These
+          Once two browsers are connected, ecoos3 opens WebRTC <em>data channels</em> between them. These
           are direct connections: packets go from one computer to the other over the internet, or over
           your local network if you’re both on it. File contents, file names and chat messages all
           travel this way. There’s no server in the data path to store or read them.
@@ -144,10 +144,10 @@ export function HowItWorks() {
         <p>
           The standard fix is a TURN relay: a server that forwards the encrypted traffic between the two
           browsers. It still can’t read the data, but every byte passes through it, which makes it
-          expensive to run for large files. eco3 doesn’t have a relay yet; relay support is planned.
+          expensive to run for large files. ecoos3 doesn’t have a relay yet; relay support is planned.
         </p>
         <p>
-          When you open the app, eco3 runs a quick check on your network and shows a warning if it looks
+          When you open the app, ecoos3 runs a quick check on your network and shows a warning if it looks
           restrictive. It’s an estimate rather than a guarantee: whether a connection works also depends
           on the other person’s network.
         </p>
@@ -206,7 +206,7 @@ export function HowItWorks() {
         </ul>
 
         <p className="cta">
-          <Link to="/app" className="btn btn--primary">Try eco3</Link>
+          <Link to="/app" className="btn btn--primary">Try ecoos3</Link>
         </p>
       </article>
     </SiteLayout>

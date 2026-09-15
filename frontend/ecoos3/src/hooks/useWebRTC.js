@@ -20,7 +20,7 @@ const nameOf = (metaRef, peerId) => peerLabel(peerId, metaRef.current[peerId]?.a
 
 let messageId = 0;
 
-const loadPersist = () => localStorage.getItem('eco3-persist') !== 'off';
+const loadPersist = () => localStorage.getItem('ecoos3-persist') !== 'off';
 
 export function useWebRTC() {
   const [peers, setPeers] = useState([]); // [{ id, state }]
@@ -53,7 +53,7 @@ export function useWebRTC() {
   }, []);
 
   const setPersist = useCallback((on) => {
-    localStorage.setItem('eco3-persist', on ? 'on' : 'off');
+    localStorage.setItem('ecoos3-persist', on ? 'on' : 'off');
     setPersistState(on);
   }, []);
 

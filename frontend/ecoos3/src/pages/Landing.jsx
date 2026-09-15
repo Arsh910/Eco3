@@ -46,11 +46,11 @@ const REQUIREMENTS = [
   },
   {
     title: 'Both people online together',
-    text: 'eco3 isn’t somewhere to leave a file for someone to collect later.',
+    text: 'ecoos3 isn’t somewhere to leave a file for someone to collect later.',
   },
   {
     title: 'A network that allows direct connections',
-    text: 'Strict corporate firewalls and some mobile networks block them. eco3 warns you, and relay support is planned.',
+    text: 'Strict corporate firewalls and some mobile networks block them. ecoos3 warns you, and relay support is planned.',
   },
   {
     title: 'Speed set by the slower connection',
@@ -71,7 +71,7 @@ export function Landing() {
   return (
     <SiteLayout
       path="/"
-      title="Send large files directly between computers | eco3"
+      title="Send large files directly between computers | ecoos3"
       description="Send files of any size straight from one browser to another. No upload, no account — and interrupted transfers pick up where they stopped, even days later."
     >
       <section className="hero">
@@ -82,7 +82,7 @@ export function Landing() {
             without the upload
           </h1>
           <p className="hero__lead">
-            eco3 connects two browsers directly, so your file goes from your disk to theirs — no size
+            ecoos3 connects two browsers directly, so your file goes from your disk to theirs — no size
             limit, no account, nothing stored in between.
           </p>
           <Link to="/app" className="btn btn--dark btn--lg">Start a transfer</Link>
@@ -94,8 +94,8 @@ export function Landing() {
         </div>
 
         <div className="hero__shots">
-          <img className="shot shot--back" src={chatShot} alt="eco3 chat between two people during a transfer" width="420" height="484" />
-          <img className="shot shot--front" src={filesShot} alt="eco3 receiving an 80 GB file, 62% complete" width="460" height="334" />
+          <img className="shot shot--back" src={chatShot} alt="ecoos3 chat between two people during a transfer" width="420" height="484" />
+          <img className="shot shot--front" src={filesShot} alt="ecoos3 receiving an 80 GB file, 62% complete" width="460" height="334" />
         </div>
       </section>
 
@@ -123,7 +123,7 @@ export function Landing() {
 
       <section className="section split">
         <div>
-          <h2 className="section__title">Why people use eco3</h2>
+          <h2 className="section__title">Why people use ecoos3</h2>
           <p className="section__lead">It does one job: gets a big file from one computer to another, directly.</p>
         </div>
         <div className="advantages">
@@ -148,13 +148,13 @@ export function Landing() {
             <p>Run an 80 GB transfer for an hour a day. It picks up where it stopped, and only the missing part is sent.</p>
             <Link to="/app" className="btn btn--light btn--lg">Start a transfer</Link>
           </div>
-          <img className="shot promo__shot" src={resumeShot} alt="eco3 unfinished transfers list with a Resume button" width="620" height="289" loading="lazy" />
+          <img className="shot promo__shot" src={resumeShot} alt="ecoos3 unfinished transfers list with a Resume button" width="620" height="289" loading="lazy" />
         </div>
       </section>
 
       <section className="section row">
         <div className="row__media">
-          <img className="shot" src={roomShot} alt="eco3 room code K7M2QX with two connected peers" width="720" height="301" loading="lazy" />
+          <img className="shot" src={roomShot} alt="ecoos3 room code K7M2QX with two connected peers" width="720" height="301" loading="lazy" />
         </div>
         <div>
           <h2 className="section__title">Start in seconds</h2>

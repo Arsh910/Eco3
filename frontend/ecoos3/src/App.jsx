@@ -69,7 +69,7 @@ function App() {
           <h1 className="header__title">
             <Link to="/" className="header__brand">
               <img src={logo} alt="" width="36" height="36" />
-              eco3
+              ecoos3
             </Link>
           </h1>
           <p className="header__subtitle">Share text and files directly between peers</p>
