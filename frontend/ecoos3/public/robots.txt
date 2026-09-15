@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ecoos3.app/sitemap.xml
+Sitemap: https://ecoos3.duckdns.org/sitemap.xml
