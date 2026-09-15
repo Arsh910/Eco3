@@ -119,25 +119,38 @@ export function useWebRTC() {
     if (!state.completeSignal) return;
     if (state.receivedCount < state.meta.totalChunks) return;
 
-
     if (state.finalizing) return;
     state.finalizing = true;
 
-    await state.writable.close();
+    if (state.confirmTimer) { clearInterval(state.confirmTimer); state.confirmTimer = null; }
+
+    try { await state.writable.close(); } 
+    catch (e) {
+      state.finalizing = false;
+      log(`finalize failed: ${e.message}`);
+      updateTransfer(peerId, fileId, { error: e.message });
+      return;
+    }
+
     await patchTransfer(fileId, peerId, { status: 'complete', receivedCount: state.receivedCount });
     refreshResumable();
 
     peersRef.current[peerId]?.control?.send(JSON.stringify({ type: 'file-verified', fileId }));
 
-    // costs nothing and opening it never re-downloads the file.
-    const file = await state.handle.getFile();
-    const openUrl = PREVIEWABLE.test(file.type) ? URL.createObjectURL(file) : null;
-
-    updateTransfer(peerId, fileId, { done: true, received: state.receivedCount, openUrl });
+    updateTransfer(peerId, fileId, { done: true, received: state.receivedCount});
     log(`file completed from ${nameOf(peerMetaRef, peerId)}: ${state.meta.name}`);
+    
+    // costs nothing and opening it never re-downloads the file.
+    try {
+      const file = await state.handle.getFile();
+      if (PREVIEWABLE.test(file.type)) {
+        updateTransfer(peerId, fileId, { openUrl: URL.createObjectURL(file) });
+      }
+    } catch {}
 
     delete incommingRef.current[peerId][fileId];
     delete lastUpdateRef.current[tkey(peerId, fileId)];
+    delete lastFlushRef.current[tkey(peerId, fileId)];
 
   }, [log, updateTransfer, refreshResumable]);
 
@@ -342,16 +355,27 @@ export function useWebRTC() {
       if (!state) return;
       state.completeSignal = true;
 
-      const missing = getMissingChunks(state);
-      if (missing.length > 0 && state.accepted) {
-        log(`still missing ${missing.length} chunks, re-requesting`);
-        peersRef.current[peerId]?.control?.send(JSON.stringify({
-          type: 'resume-request', fileId: msg.fileId, missing,
-        }));
-        return;
-      }
+      setTimeout(() => {
+        const current = incommingRef.current[peerId]?.[msg.fileId];
+        if (!current || current.finalizing) return;
 
-      tryFinalize(peerId, msg.fileId);
+        const missing = getMissingChunks(current);
+        if (missing.length > 0 && current.accepted) {
+          log(`still missing ${missing.length} chunks, re-requesting`);
+          peersRef.current[peerId]?.control?.send(JSON.stringify({
+            type: 'resume-request', fileId: msg.fileId, missing,
+          }));
+          return;
+        }
+
+        tryFinalize(peerId, msg.fileId);
+      }, 500);
+
+      return;
+    }
+
+    if (msg.type === 'confirm-complete') {
+      peersRef.current[peerId]?.control?.send(JSON.stringify({type: 'file-complete', fileId: msg.fileId,}));
       return;
     }
 
@@ -382,6 +406,20 @@ export function useWebRTC() {
     if (!hasBit(state.bitmap, index)) {
       setBit(state.bitmap, index);
       state.receivedCount += 1;
+    }
+
+    if (state.receivedCount === state.meta.totalChunks && !state.completeSignal && !state.confirmTimer) {
+      const ask = () => {
+        if (state.completeSignal || state.finalizing) {
+          clearInterval(state.confirmTimer);
+          state.confirmTimer = null;
+          return;
+        }
+        log('all chunks in, asking sender to confirm');
+        peersRef.current[peerId]?.control?.send(JSON.stringify({ type: 'confirm-complete', fileId }));
+      };
+      ask();
+      state.confirmTimer = setInterval(ask, 3000);
     }
 
     //performance improvement
@@ -668,7 +706,7 @@ export function useWebRTC() {
         log(`peer left : ${nameOf(peerMetaRef, msg.peerId)}`);
         return;
       }
-
+    
       const entry = peersRef.current[msg.from] || createPeerConnection(msg.from, false);
       const pc = entry.pc;
 
@@ -930,15 +968,20 @@ export function useWebRTC() {
       fileChannel.send(payload.buffer);
     }
 
-    const waitForBuffer = () => {
-      return new Promise((resolve) => {
-        if (fileChannel.bufferedAmount <= BUFFER_LOW_THRESHOLD) {
-          resolve();
-        } else {
-          fileChannel.addEventListener('bufferedamountlow', () => resolve(), { once: true });
-        }
-      })
-    }
+    const waitForBuffer = () => new Promise((resolve, reject) => {
+      if (fileChannel.readyState !== 'open') return reject(new Error('channel closed'));
+      if (fileChannel.bufferedAmount <= BUFFER_LOW_THRESHOLD) return resolve();
+
+      const onLow = () => { cleanup(); resolve(); };
+      const onClose = () => { cleanup(); reject(new Error('channel closed')); };
+      const cleanup = () => {
+        fileChannel.removeEventListener('bufferedamountlow', onLow);
+        fileChannel.removeEventListener('close', onClose);
+      };
+
+      fileChannel.addEventListener('bufferedamountlow', onLow, { once: true });
+      fileChannel.addEventListener('close', onClose, { once: true });
+    });
 
     // performance improvement
     function concatBuffers(a, b) {

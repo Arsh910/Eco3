@@ -369,6 +369,16 @@ textarea {
   color: var(--text-dim);
 }
 
+.icon-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .btn--ghost:hover:not(:disabled) {
   background: var(--surface-2);
   border-color: transparent;

@@ -56,6 +56,7 @@ const PATHS = {
       <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
     </>
   ),
+  spinner: <circle cx="12" cy="12" r="9" strokeDasharray="16 40" />,
 };
 
 export function Icon({ name, size = 16, className }) {

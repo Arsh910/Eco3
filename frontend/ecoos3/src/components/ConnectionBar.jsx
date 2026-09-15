@@ -9,16 +9,21 @@ export function ConnectionBar({
   const [code, setCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const inRoom = Boolean(roomCode);
   const waiting = inRoom && peerCount === 0;
+  const connecting = creating || (inRoom && signaling !== 'open' && signaling !== 'error' && signaling !== 'closed');
 
   const create = async () => {
     setError('');
+    setCreating(true);
     try {
       await createRoom();
     } catch {
       setError('Could not create a room. Is the signaling server running?');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -68,23 +73,30 @@ export function ConnectionBar({
               value={code}
               onChange={(event) => setCode(event.target.value.toUpperCase().slice(0, CODE_LENGTH))}
               placeholder="ENTER CODE"
-              disabled={inRoom}
+              disabled={inRoom || creating}
               aria-label="Room code to join"
             />
-            <button type="submit" className="btn" disabled={inRoom || code.length !== CODE_LENGTH}>
+            <button type="submit" className="btn" disabled={inRoom || creating || code.length !== CODE_LENGTH}>
               Join
             </button>
           </div>
         </form>
 
         {inRoom ? (
-          <button type="button" className="btn" onClick={leaveRoom}>
-            Leave
-          </button>
+          connecting ? (
+            <button type="button" className="btn" disabled>
+              <Icon name="spinner" className="icon-spin" />
+              Connecting…
+            </button>
+          ) : (
+            <button type="button" className="btn" onClick={leaveRoom}>
+              Leave
+            </button>
+          )
         ) : (
-          <button type="button" className="btn btn--primary" onClick={create}>
-            <Icon name="plus" />
-            Create
+          <button type="button" className="btn btn--primary" onClick={create} disabled={creating}>
+            <Icon name={creating ? 'spinner' : 'plus'} className={creating ? 'icon-spin' : undefined} />
+            {creating ? 'Creating…' : 'Create'}
           </button>
         )}
       </div>
