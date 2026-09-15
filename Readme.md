@@ -1,6 +1,6 @@
 <div align="center">
 
-# eco3
+# ecoos3
 
 **Share text and files directly between browsers — no uploads, no accounts, no size limit.**
 
@@ -10,15 +10,15 @@
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
 [![Encrypted](https://img.shields.io/badge/Encrypted-DTLS-3ECF8E?style=flat-square&logo=letsencrypt&logoColor=white)](#privacy)
 
-<img src="ReadMeImg/1.png" alt="eco3 interface" width="900">
+<img src="ReadMeImg/1.png" alt="ecoos3 interface" width="900">
 
 </div>
 
 ---
 
-## What is eco3?
+## What is ecoos3?
 
-eco3 is a peer-to-peer transfer app that runs entirely in your browser. Open it, create a
+ecoos3 is a peer-to-peer transfer app that runs entirely in your browser. Open it, create a
 room, share the six-character code, and anyone who joins can exchange messages and files
 with you directly.
 
@@ -65,28 +65,28 @@ Rooms are temporary. When the last person leaves, the room disappears.
 
 ## Resuming transfers
 
-Big transfers get interrupted — a laptop sleeps, a tab closes, Wi-Fi drops. eco3 remembers
+Big transfers get interrupted — a laptop sleeps, a tab closes, Wi-Fi drops. ecoos3 remembers
 how far each one got, so you only ever send the part that's missing.
 
 **Example: a 40 GB video library over a long weekend**
 
 1. **Friday evening** — you start sending the library to a friend. At 60%, your laptop's
    battery dies.
-2. **Monday morning** — you both open eco3 again. The transfer is waiting at the top under
+2. **Monday morning** — you both open ecoos3 again. The transfer is waiting at the top under
    **Unfinished transfers**, marked **Waiting for peer**.
 3. **Reconnect** — create a room (a brand-new code is fine) and your friend joins. As soon as
-   you're both in, eco3 recognises the transfer on both sides and **Resume** unlocks.
+   you're both in, ecoos3 recognises the transfer on both sides and **Resume** unlocks.
 4. **Resume** — click it on both ends. The browser asks permission to reopen the file (that's
    what **Resume (grant access)** means), and only the missing 40% is sent.
 
-Before continuing, eco3 checks it's the exact same file. If it was edited or replaced in the
+Before continuing, ecoos3 checks it's the exact same file. If it was edited or replaced in the
 meantime, you're told so instead of ending up with a mix of two files.
 
 - Survives reloads, closed tabs, restarts and days away — unfinished transfers are kept for
   30 days
 - Works in **any room**, as long as it's the same two people
 - **Save progress for resume** is on by default. Progress is only saved when both people have
-  it on — if either has it off, eco3 warns you before the transfer starts
+  it on — if either has it off, ecoos3 warns you before the transfer starts
 - **Discard** removes a transfer for good — for received files, the partial file is deleted
   too where the browser allows it
 - In Firefox and Safari, the sender picks the same file again to resume (**Select file to
@@ -110,7 +110,7 @@ which is currently Chromium-only.
 | Safari | ✅ | ❌ | Sending, by re-selecting the file | ✅ |
 
 > **Note**
-> eco3 detects this on load. In Firefox or Safari you'll see a banner explaining the
+> ecoos3 detects this on load. In Firefox or Safari you'll see a banner explaining the
 > limitation, and the **Accept** button is disabled — everything else keeps working, so you
 > can still send a large file to someone on Chrome.
 
@@ -129,7 +129,7 @@ of gigabytes and risks crashing the tab.
   days or when you discard them
 - No accounts, no sign-in, no tracking
 
-Peers on restrictive networks may not be able to reach each other directly, since eco3 uses
+Peers on restrictive networks may not be able to reach each other directly, since ecoos3 uses
 a public STUN server and no relay fallback.
 
 ## Running it locally
@@ -142,7 +142,7 @@ cd server
 go run ./api
 
 # web app — http://localhost:5173
-cd frontend/eco3
+cd frontend/ecoos3
 npm install
 npm run dev
 ```
