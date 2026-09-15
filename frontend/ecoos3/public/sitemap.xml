@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://ecoos3.app/</loc>
+    <loc>https://ecoos3.duckdns.org/</loc>
   </url>
   <url>
-    <loc>https://ecoos3.app/how-it-works</loc>
+    <loc>https://ecoos3.duckdns.org/how-it-works</loc>
   </url>
   <url>
-    <loc>https://ecoos3.app/large-file-transfer</loc>
+    <loc>https://ecoos3.duckdns.org/large-file-transfer</loc>
   </url>
 </urlset>
