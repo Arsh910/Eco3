@@ -13,7 +13,8 @@ function status(transfer, incoming) {
     if (!incoming) return 'Waiting for peer';
     return hasFSA ? 'Waiting for you' : 'Cannot receive in this browser';
   }
-  return incoming ? 'Receiving' : 'Sending';
+  const progressed = (incoming ? transfer.received : transfer.sent) ?? 0;
+  return `${incoming ? 'Receiving' : 'Sending'} ${progressed}/${transfer.total} chunks`;
 }
 
 function Transfer({ transfer, onAccept }) {
