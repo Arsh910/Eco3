@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 )
 
 type application struct {
@@ -22,6 +23,7 @@ var upgrader = websocket.Upgrader{
 }
 
 func main() {
+	godotenv.Load()
 	app := &application{
 		port: env.GetEnvInt("PORT", 8080),
 		upg:  upgrader,
