@@ -12,4 +12,4 @@ jobs:
       - name: Ping health endpoint
         run: |
           sleep $((RANDOM % 120))
-          curl -fsS --max-time 60 https://eco3-e3k3.onrender.com/api/v1/health || true
+          curl -fsS --max-time 60 https://ecoos3.onrender.com/api/v1/health || true
